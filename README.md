@@ -23,7 +23,7 @@ No backend. No build step. No API keys. No dependencies beyond Google Fonts and 
 - **Chunked confirm:** "confirm all open" runs in visible batches with live progress.
 - **Import / export:** save, share, or resume a sweep as JSON (groups + both-orders flag + favorites + cached results).
 - **Persistence:** results cache to `localStorage` so re-sweeps reuse prior lookups.
-- **Scriptable engine:** the name-finding logic lives in `engine.js`, decoupled from the DOM. Import it and run a full sweep programmatically, in the browser or Node, no UI required (see [Programmatic use](#programmatic-use)).
+- **Scriptable engine:** the name-finding logic lives in `engine.js`, decoupled from the DOM. Import it and run a full sweep programmatically, in the browser or Node, or drive it from a shell/agent with the bundled [`cli.mjs`](./cli.mjs), no UI required (see [Programmatic use](#programmatic-use)).
 
 ---
 
@@ -66,11 +66,41 @@ node test-engine.mjs
 
 > Real availability checks only happen where `fetch` can reach DNS/RDAP: a browser served over HTTPS, or Node with network access. Offline, the engine still generates and scores combinations.
 
+### Command line
+
+[`cli.mjs`](./cli.mjs) is a thin, dependency-free wrapper over `findNames` for running a full sweep from a shell or an agent: config in, JSON results out on stdout (progress and errors on stderr, so the output stays machine-readable).
+
+```sh
+# words inline: groups split by " / ", words by comma
+node cli.mjs --groups "swift,bright / lab,forge" --open-only --limit 20
+
+# or from a JSON config (same shape as an in-app export)
+node cli.mjs --file seed-wordset.json --pretty
+cat seed-wordset.json | node cli.mjs --stdin
+```
+
+Output is `{ ok, count, total, config, results }`, where each result is `{ domain, parts, dns, rdap, state, score }` (add `--verbose` for the full score breakdown):
+
+```json
+{
+  "ok": true,
+  "count": 1,
+  "total": 8,
+  "config": { "bothOrders": true, "confirm": true, "maxCombos": 10000 },
+  "results": [
+    { "domain": "swiftforge.com", "parts": ["swift", "forge"],
+      "dns": "clear", "rdap": { "state": "open" }, "state": "open", "score": 90 }
+  ]
+}
+```
+
+Useful flags: `--no-confirm` (skip the RDAP pass; DNS-only, works offline), `--open-only`, `--min-score <n>`, `--limit <n>`, `--max-combos <n>`, `--doh-conc`/`--rdap-conc`, `--progress`, `--pretty`. Run `node cli.mjs --help` for the full list.
+
 ---
 
 ## Deploying
 
-It's two static files, `index.html` and `engine.js`, that must be served from the same directory. Any static host works. Recommended options in [DEPLOY.md](./DEPLOY.md).
+It's two static files, `index.html` and `engine.js`, that must be served from the same directory. Any static host works.
 
 ---
 

@@ -12,6 +12,11 @@ imports the engine and owns all UI/DOM/render/cache logic.
   `engine.js` (logic). The only test is the headless smoke test:
   `node test-engine.mjs`. (Only external assets: Google Fonts + three free public
   APIs.)
+- **Headless CLI:** `cli.mjs` is a thin agent/shell wrapper over `findNames`.
+  Config in via `--groups`/`--file`/`--stdin` (same JSON shape as an in-app
+  export), JSON results out on stdout, progress/errors on stderr. Example:
+  `node cli.mjs --groups "swift,bright / lab,forge" --open-only --limit 20`.
+  Run `node cli.mjs --help` for all flags.
 - **Must be served over HTTPS in a real browser.** Live `fetch()` to DNS/RDAP/
   Datamuse is blocked from `file://` and sandboxed contexts, so the app shows a
   "network blocked" banner. Locally: `/serve` (or `npx serve` then open the URL).
