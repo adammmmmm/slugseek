@@ -403,6 +403,32 @@ button {
 .lane.active .lane-n {
   color: var(--accent);
 }
+.lane-caret {
+  background: transparent;
+  border: 0;
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.lane.active .lane-caret {
+  color: var(--accent);
+}
+.lane-summary {
+  font-size: 12px;
+  color: var(--dim);
+  align-self: center;
+}
+.lane.collapsed {
+  align-items: center;
+}
+.lane.collapsed .lane-chips {
+  min-height: 0;
+}
+.lane.collapsed .lane-bar {
+  display: none;
+}
 .lane.lane-dragging {
   opacity: 0.35;
 }
@@ -599,22 +625,25 @@ button.run:disabled {
   display: flex;
   flex-direction: column;
 }
-.sheet-handle {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 3px 0 10px;
-  margin-top: -2px;
+/* results header: single control line, with a drag grip in the top-right.
+   The whole header is the drag target (taps on buttons are guarded in JS). */
+.reshead {
+  position: relative;
+  flex: none;
   cursor: grab;
   touch-action: none;
   user-select: none;
-  flex: none;
+  padding-top: 4px;
+  margin-bottom: 10px;
 }
-.sheet-handle:active {
+.reshead:active {
   cursor: grabbing;
 }
-.sheet-handle .grip {
-  width: 42px;
+.reshead .grip {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 34px;
   height: 4px;
   border-radius: 3px;
   background: var(--border-hi);
@@ -622,33 +651,25 @@ button.run:disabled {
     background 0.15s,
     width 0.15s;
 }
-.flags {
+.resbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+}
+.opencount {
+  font-size: 12px;
+  color: var(--dim);
+}
+.opencount b {
+  color: var(--accent);
+  font-weight: 700;
+}
+.sortgroup {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
-  flex: none;
-  margin-bottom: 10px;
-}
-.flag {
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  color: var(--dim);
-  border-radius: 4px;
-  padding: 5px 9px;
-  font-size: 12px;
-  cursor: pointer;
-}
-.flag span {
-  color: var(--faint);
-}
-.flag[aria-pressed="true"] {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: rgba(79, 208, 224, 0.1);
-}
-.flag[aria-pressed="true"] span {
-  color: var(--accent);
 }
 .vall {
   margin-left: auto;
@@ -825,35 +846,6 @@ button.run:disabled {
 .rdetail {
   display: none;
 }
-.flag.fav {
-  font-size: 13px;
-  line-height: 1;
-}
-.flag.fav[aria-pressed="true"] {
-  color: var(--yellow);
-  border-color: var(--yellow);
-  background: rgba(240, 192, 90, 0.1);
-}
-.flag.fav[aria-pressed="true"] span {
-  color: var(--yellow);
-}
-.sortbar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: none;
-  margin-bottom: 10px;
-}
-.sortbar .sortlabel {
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--faint);
-  margin-right: 2px;
-}
-.sortbar .grow {
-  flex: 1;
-}
 .sopt {
   background: transparent;
   border: 1px solid var(--border);
@@ -1013,12 +1005,12 @@ button.run:disabled {
   .rdetail.pending {
     color: var(--dim);
   }
-  /* tighten the sort nav so options stay on one line */
-  .sortbar {
-    gap: 5px;
+  /* tighten the results bar so it stays on one line */
+  .resbar {
+    gap: 6px;
   }
-  .sortbar .sortlabel {
-    display: none;
+  .sortgroup {
+    gap: 5px;
   }
   .sopt {
     padding: 4px 8px;
@@ -1157,6 +1149,24 @@ button.run:disabled {
 }
 .modal-body p {
   margin: 0 0 10px;
+}
+.import-text {
+  width: 100%;
+  height: 160px;
+  resize: vertical;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 16px; /* >=16px so iOS does not zoom on focus */
+  padding: 9px 10px;
+  box-sizing: border-box;
+}
+.import-acts {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
 }
 .modal-body h4 {
   margin: 14px 0 5px;
@@ -1440,9 +1450,6 @@ button.run:disabled {
   .menu-remove:hover {
     background: rgba(255, 107, 120, 0.08);
   }
-  .flag[aria-pressed="false"]:hover {
-    color: var(--fg);
-  }
   .vall:hover {
     background: rgba(70, 240, 160, 0.08);
   }
@@ -1451,9 +1458,6 @@ button.run:disabled {
     border-color: var(--border-hi);
   }
   .star:hover {
-    color: var(--yellow);
-  }
-  .flag.fav[aria-pressed="false"]:hover {
     color: var(--yellow);
   }
   .rb.confirm:hover {
@@ -1478,9 +1482,9 @@ button.run:disabled {
   .keybar .kbtn:hover:not(:disabled) {
     color: var(--fg);
   }
-  .sheet-handle:hover .grip {
+  .reshead:hover .grip {
     background: var(--dim);
-    width: 52px;
+    width: 44px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1526,28 +1530,24 @@ button.run:disabled {
       <span class="est" id="est"></span>
     </div>
 
-    <div class="readout" id="readout"><span class="bar" id="bar"></span><span class="pct" id="pct"></span><span class="seg" id="seg"></span></div>
+    <div class="readout" id="readout"><span class="bar" id="bar"></span><span class="pct" id="pct"></span></div>
     <div class="notice" id="notice"></div>
     <div class="banner" id="netBanner"></div>
     </div><!-- /topZone -->
 
     <div class="panel results" id="resPanel" style="display:none">
-      <span class="ptitle">results</span>
       <div class="body">
-        <div class="sheet-handle" id="sheetHandle"><span class="grip"></span></div>
-        <div class="flags" id="flags">
-          <button class="flag" data-f="open"    aria-pressed="true">--open <span id="cOpen">0</span></button>
-          <button class="flag" data-f="all"     aria-pressed="false">--all <span id="cAll">0</span></button>
-          <button class="flag" data-f="taken"   aria-pressed="false">--taken <span id="cTaken">0</span></button>
-          <button class="flag" data-f="unknown" aria-pressed="false" style="display:none">--uncertain <span id="cUnknown">0</span></button>
-          <button class="flag fav" id="favFilter" aria-pressed="false">&#9733; <span id="cFav">0</span></button>
-          <button class="vall" id="verifyAll">[ confirm all open ]</button>
-        </div>
-        <div class="sortbar">
-          <span class="sortlabel">sort</span>
-          <button class="sopt" data-s="score" aria-pressed="true">score</button>
-          <button class="sopt" data-s="default" aria-pressed="false">original</button>
-          <button class="sopt" data-s="az"    aria-pressed="false">a&#8211;z</button>
+        <div class="reshead" id="resHead">
+          <span class="grip" id="resGrip"></span>
+          <div class="resbar">
+            <span class="opencount">open <b id="cOpen">0</b></span>
+            <span class="sortgroup">
+              <button class="sopt" data-s="score" aria-pressed="true">score</button>
+              <button class="sopt" data-s="default" aria-pressed="false">original</button>
+              <button class="sopt" data-s="az"    aria-pressed="false">a&#8211;z</button>
+            </span>
+            <button class="vall" id="verifyAll" title="confirm all open">[ confirm ]</button>
+          </div>
         </div>
         <div class="res-empty" id="resEmpty"></div>
         <div class="rows" id="rows"></div>
@@ -1593,8 +1593,8 @@ button.run:disabled {
       </p>
       <p>
         Your word lists, favorites, and results are saved only in this browser's local storage,
-        on your own machine. Clear your browser data and they're gone. Exporting just hands you a
-        file you control.
+        on your own machine. Clear your browser data and they're gone. Exporting just copies your
+        word list to the clipboard, for you to paste wherever you like.
       </p>
       <h4>Terms, kept human</h4>
       <p>
@@ -1609,10 +1609,22 @@ button.run:disabled {
     </div>
   </div>
 </div>
+<div class="modal" id="importModal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <span class="modal-title">import word list</span>
+      <button class="pclose" id="importCancel">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p>Paste an exported word list below, then import.</p>
+      <textarea id="importText" class="import-text" placeholder="paste exported JSON here…" spellcheck="false"></textarea>
+      <div class="import-acts"><button class="tbtn" id="importDo">import</button></div>
+    </div>
+  </div>
+</div>
 <div class="scorepanel" id="scorePanel"></div>
 <div class="rowsheet-backdrop" id="rowSheetBackdrop"></div>
 <div class="rowsheet" id="rowSheet" role="dialog" aria-modal="true" aria-label="domain details"></div>
-<input type="file" id="importFile" accept="application/json,.json" style="display:none" />
 
 <script type="module">
 import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./engine.js";
@@ -1635,7 +1647,6 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     readout: $("readout"),
     bar: $("bar"),
     pct: $("pct"),
-    seg: $("seg"),
     notice: $("notice"),
     netBanner: $("netBanner"),
     resPanel: $("resPanel"),
@@ -1644,21 +1655,18 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     rows: $("rows"),
     verifyAll: $("verifyAll"),
     topZone: $("topZone"),
-    sheetHandle: $("sheetHandle"),
+    resHead: $("resHead"),
     cOpen: $("cOpen"),
-    cAll: $("cAll"),
-    cTaken: $("cTaken"),
-    cUnknown: $("cUnknown"),
-    cFav: $("cFav"),
-    favFilter: $("favFilter"),
+    sortgroup: document.querySelector(".sortgroup"),
     aboutBtn: $("aboutBtn"),
     aboutModal: $("aboutModal"),
     aboutClose: $("aboutClose"),
-    sortbar: document.querySelector(".sortbar"),
-    flagUnknown: document.querySelector('.flag[data-f="unknown"]'),
     exportBtn: $("exportBtn"),
     importBtn: $("importBtn"),
-    importFile: $("importFile"),
+    importModal: $("importModal"),
+    importText: $("importText"),
+    importDo: $("importDo"),
+    importCancel: $("importCancel"),
     pop: $("pop"),
     popTitle: $("popTitle"),
     popClose: $("popClose"),
@@ -1745,15 +1753,14 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     SAVE_DEBOUNCE = 900;
 
   let groups = [[]],
+    groupCollapsed = [false], // view-only per-group collapse state, index-aligned with groups
     activeGroup = 0,
     undoStack = [];
   let resultCache = new Map();
   const wordSugCache = new Map();
   let rows = [],
-    activeFilter = "open",
     displayLimit = DISPLAY_CAP;
   let sortMode = "score",
-    favOnly = false,
     batchSeq = 0,
     seqCounter = 0;
   let lastSweepSig = null; // signature of word-set + bothOrders as of last sweep
@@ -1868,6 +1875,7 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
           Array.isArray(g) ? g.map((w) => String(w).toLowerCase()).filter(Boolean) : [],
         );
       if (!groups.length) groups = [[]];
+      groupCollapsed = groups.map(() => false);
       activeGroup = Math.min(activeGroup, groups.length - 1);
       if (typeof d.bothOrders === "boolean") el.reversed.checked = d.bothOrders;
       if (d.cache)
@@ -1907,6 +1915,7 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     if (!undoStack.length) return;
     groups = JSON.parse(undoStack.pop());
     if (!groups.length) groups = [[]];
+    groupCollapsed = groups.map(() => false);
     activeGroup = Math.min(activeGroup, groups.length - 1);
     el.undoBtn.disabled = !undoStack.length;
     afterWords();
@@ -1929,17 +1938,27 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     groups[gi] = groups[gi].filter((x) => x !== w);
     afterWords();
   }
+  // full reset: a "clear all" implies starting a fresh session, so wipe words,
+  // results, cache, favorites, and persisted storage.
   function clearAll() {
-    if (!allWords().length) return;
+    if (!allWords().length && !rows.length) return;
     snapshot();
     groups = [[]];
+    groupCollapsed = [false];
     activeGroup = 0;
+    favorites = new Set();
+    resultCache = new Map();
+    resetResults();
+    try {
+      localStorage.removeItem(LS_KEY);
+    } catch (e) {}
     afterWords();
     reflectGrouped();
   }
   function loadSample() {
     snapshot();
     groups = SAMPLE_GROUPS.map((g) => g.slice());
+    groupCollapsed = groups.map(() => false);
     activeGroup = groups.length - 1;
     afterWords();
     reflectGrouped();
@@ -1956,6 +1975,7 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     if (isGrouped()) return;
     snapshot();
     groups = [groups[0], []];
+    groupCollapsed = [false, false];
     activeGroup = 1;
     flip(renderWords);
     updateEstimate();
@@ -1970,6 +1990,7 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
       if (!m.includes(w)) m.push(w);
     });
     groups = [m];
+    groupCollapsed = [false];
     activeGroup = 0;
     flip(renderWords);
     updateEstimate();
@@ -1983,22 +2004,21 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     if (groups.length >= 3) return; // 3 groups max (prefix × root × suffix)
     snapshot();
     groups.push([]);
+    groupCollapsed.push(false);
     activeGroup = groups.length - 1;
     flip(renderWords);
     updateEstimate();
     reflectGrouped();
     saveDebounced();
   }
+  // closing a group discards its words (does not merge them elsewhere)
   function delGroup(gi) {
     snapshot();
-    const words = groups[gi];
     groups.splice(gi, 1);
-    if (!groups.length) groups = [[]];
-    else {
-      const into = Math.max(0, gi - 1);
-      words.forEach((w) => {
-        if (!groups[into].includes(w)) groups[into].push(w);
-      });
+    groupCollapsed.splice(gi, 1);
+    if (!groups.length) {
+      groups = [[]];
+      groupCollapsed = [false];
     }
     activeGroup = Math.min(activeGroup, groups.length - 1);
     flip(renderWords);
@@ -2024,12 +2044,16 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     snapshot();
     const activeWords = groups[activeGroup];
     const moving = groups[from];
+    const movingCollapsed = groupCollapsed[from];
     const target = groups[targetIdx];
     const without = groups.filter((_, i) => i !== from);
+    const withoutCollapsed = groupCollapsed.filter((_, i) => i !== from);
     let ti = without.indexOf(target);
     if (pos === "below") ti += 1;
     without.splice(ti, 0, moving);
+    withoutCollapsed.splice(ti, 0, movingCollapsed);
     groups = without;
+    groupCollapsed = withoutCollapsed;
     activeGroup = groups.indexOf(activeWords);
     if (activeGroup < 0) activeGroup = 0;
     flip(renderWords);
@@ -2115,21 +2139,35 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
       return;
     }
     groups.forEach((ws, gi) => {
+      const collapsed = !!groupCollapsed[gi];
       const lane = document.createElement("div");
-      lane.className = "lane" + (gi === activeGroup ? " active" : "");
+      lane.className = "lane" + (gi === activeGroup ? " active" : "") + (collapsed ? " collapsed" : "");
       lane.dataset.gi = gi;
       lane.onclick = (e) => {
-        if (e.target.closest(".chip") || e.target.closest(".lane-del")) return;
+        if (e.target.closest(".chip") || e.target.closest(".lane-del") || e.target.closest(".lane-caret"))
+          return;
         setActive(gi);
       };
       const head = document.createElement("div");
       head.className = "lane-head";
       head.title = "drag to reorder";
-      head.innerHTML = `<span class="lane-grip">\u2630</span><span class="lane-bar"></span><span class="lane-n">${gi + 1}</span>`;
+      head.innerHTML = `<button class="lane-caret" title="${collapsed ? "expand" : "collapse"}">${collapsed ? "\u25b8" : "\u25be"}</button><span class="lane-grip">\u2630</span><span class="lane-bar"></span><span class="lane-n">${gi + 1}</span>`;
       head.addEventListener("pointerdown", (e) => startLaneDrag(e, gi, lane));
+      const caret = head.querySelector(".lane-caret");
+      caret.addEventListener("pointerdown", (e) => e.stopPropagation());
+      caret.onclick = (e) => {
+        e.stopPropagation();
+        groupCollapsed[gi] = !groupCollapsed[gi];
+        renderWords();
+      };
       const chips = document.createElement("div");
       chips.className = "lane-chips";
-      if (!ws.length) {
+      if (collapsed) {
+        const sum = document.createElement("span");
+        sum.className = "lane-summary";
+        sum.textContent = `${ws.length} word${ws.length === 1 ? "" : "s"}`;
+        chips.appendChild(sum);
+      } else if (!ws.length) {
         const e = document.createElement("span");
         e.className = "empty-mini";
         const role = roleName(gi);
@@ -2162,13 +2200,7 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     const n = pairCount(effectiveBoth());
     if (n > 0) {
       const noun = groups.length === 3 ? "combo" : "pair";
-      const pattern =
-        groups.length === 3
-          ? " \u00b7 prefix \u00d7 root \u00d7 suffix"
-          : groups.length === 2
-            ? " \u00b7 modifier \u00d7 root"
-            : "";
-      el.est.textContent = `# ${n.toLocaleString()} ${noun}${n !== 1 ? "s" : ""}${pattern}`;
+      el.est.textContent = `# ${n.toLocaleString()} ${noun}${n !== 1 ? "s" : ""}`;
     } else {
       el.est.textContent = isGrouped() ? "# fill the groups" : "# add 2+ words";
     }
@@ -2694,11 +2726,7 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     }
     return node;
   }
-  const matchesFilter = (d) => {
-    if (favOnly && !favorites.has(d.domain)) return false;
-    const b = bucketOf(d);
-    return activeFilter === "all" || activeFilter === b;
-  };
+  const matchesFilter = (d) => bucketOf(d) === "open";
   const cmpScore = (a, b) => {
     const pa = PRIO[stateOf(a)],
       pb = PRIO[stateOf(b)];
@@ -2737,15 +2765,7 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     el.rows.appendChild(frag);
     if (subset.length > displayLimit) el.rows.appendChild(makeMoreBtn(subset));
     el.resEmpty.textContent =
-      subset.length === 0
-        ? rows.length
-          ? favOnly
-            ? "# no favorites match this filter"
-            : activeFilter === "open"
-              ? "# no open .coms: try --all, or add more words"
-              : "# nothing matches this filter"
-          : ""
-        : "";
+      subset.length === 0 && rows.length ? "# no open .coms: add more words" : "";
   }
   let renderPending = false,
     lastRender = 0;
@@ -2768,30 +2788,12 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
   }
 
   function recount() {
-    let o = 0,
-      t = 0,
-      u = 0;
+    let o = 0;
     rows.forEach((d) => {
-      const b = bucketOf(d);
-      if (b === "open") o++;
-      else if (b === "taken") t++;
-      else if (b === "unknown") u++;
+      if (bucketOf(d) === "open") o++;
     });
     el.cOpen.textContent = o;
-    el.cAll.textContent = rows.length;
-    el.cTaken.textContent = t;
-    el.cUnknown.textContent = u;
-    const favInRows = rows.reduce((n, d) => n + (favorites.has(d.domain) ? 1 : 0), 0);
-    el.cFav.textContent = favInRows;
     el.verifyAll.disabled = !rows.some((d) => stateOf(d) === "clear");
-  }
-  function setFilter(f) {
-    activeFilter = f;
-    displayLimit = DISPLAY_CAP;
-    el.flags
-      .querySelectorAll(".flag[data-f]")
-      .forEach((x) => x.setAttribute("aria-pressed", x.dataset.f === f ? "true" : "false"));
-    renderResults();
   }
   function setSort(s) {
     if (s !== sortMode) {
@@ -2799,27 +2801,12 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
       saveDebounced();
     }
     displayLimit = DISPLAY_CAP;
-    el.sortbar
+    el.sortgroup
       .querySelectorAll(".sopt")
       .forEach((x) => x.setAttribute("aria-pressed", x.dataset.s === s ? "true" : "false"));
     renderResults();
   }
-  function toggleFavFilter() {
-    favOnly = !favOnly;
-    displayLimit = DISPLAY_CAP;
-    el.favFilter.setAttribute("aria-pressed", String(favOnly));
-    renderResults();
-  }
-  function updateUncertainFlag() {
-    const n = rows.filter((d) => stateOf(d) === "unknown").length;
-    el.flagUnknown.style.display = n > 0 ? "" : "none";
-    if (n === 0 && activeFilter === "unknown") setFilter("open");
-  }
-  el.flags
-    .querySelectorAll(".flag[data-f]")
-    .forEach((f) => (f.onclick = () => setFilter(f.dataset.f)));
-  el.favFilter.onclick = toggleFavFilter;
-  el.sortbar.querySelectorAll(".sopt").forEach((b) => (b.onclick = () => setSort(b.dataset.s)));
+  el.sortgroup.querySelectorAll(".sopt").forEach((b) => (b.onclick = () => setSort(b.dataset.s)));
 
   async function verify(d, auto) {
     if (d.verifying || (d.rdap && (d.rdap.state === "open" || d.rdap.state === "registered")))
@@ -2835,7 +2822,6 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     if (!auto) {
       recount();
       scheduleRender();
-      updateUncertainFlag();
       saveDebounced();
     }
   }
@@ -2843,9 +2829,6 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     if (favorites.has(domain)) favorites.delete(domain);
     else favorites.add(domain);
     saveDebounced();
-    const favInRows = rows.reduce((n, d) => n + (favorites.has(d.domain) ? 1 : 0), 0);
-    el.cFav.textContent = favInRows;
-    if (favOnly) renderResults();
   }
   el.verifyAll.onclick = async () => {
     const open = rows.filter((d) => stateOf(d) === "clear" && !d.verifying);
@@ -2862,11 +2845,9 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
       el.verifyAll.textContent = `[ confirming ${done}/${tot}\u2026 ]`;
       recount();
       renderResults();
-      updateUncertainFlag();
     }
-    el.verifyAll.textContent = "[ confirm all open ]";
+    el.verifyAll.textContent = "[ confirm ]";
     recount();
-    updateUncertainFlag();
     saveState();
   };
 
@@ -2969,7 +2950,6 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
       refreshRunButton();
       if (pruned) {
         setNotice("nonew", null);
-        el.seg.textContent = `\u00b7 updated \u00b7 removed ${pruned.toLocaleString()} \u00b7 no new combinations`;
         recount();
         renderResults();
         saveState();
@@ -2993,8 +2973,6 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     el.resPanel.style.display = "";
     el.readout.classList.add("show");
     setSweeping(true);
-    setFilter("open");
-    el.seg.textContent = "";
     drawBar(0);
 
     // new batch (each search appends below the last)
@@ -3032,7 +3010,6 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
         done++;
         if (done % RECOUNT_EVERY === 0) {
           drawBar(done / denom);
-          el.seg.textContent = `\u00b7 dns ${done.toLocaleString()}/${needDNS.length.toLocaleString()}`;
           recount();
           scheduleRender();
         }
@@ -3045,7 +3022,6 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     if (!aborted) {
       const uncertain = newRows.filter((d) => stateOf(d) === "unknown");
       if (uncertain.length && uncertain.length <= AUTO_T2_MAX) {
-        el.seg.textContent = `\u00b7 resolving ${uncertain.length} uncertain\u2026`;
         let u = 0;
         await pool(
           uncertain,
@@ -3059,24 +3035,14 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
           },
           () => aborted,
         );
-      } else if (uncertain.length)
-        setNotice(
-          "cap2",
-          `${uncertain.length} uncertain left unconfirmed (over the ${AUTO_T2_MAX} auto-confirm limit); use --uncertain + confirm to resolve.`,
-        );
+      }
     }
 
-    const bOpen = newRows.filter((d) => stateOf(d) === "clear" || stateOf(d) === "go").length;
-    const open = rows.filter((d) => stateOf(d) === "clear" || stateOf(d) === "go").length;
-    const left = rows.filter((d) => stateOf(d) === "unknown").length;
-    const prunedNote = pruned ? ` \u00b7 removed ${pruned.toLocaleString()}` : "";
-    el.seg.textContent = `${aborted ? "\u00b7 stopped" : "\u00b7 done"} \u00b7 batch ${myBatch}: ${bOpen.toLocaleString()} open${left ? ` \u00b7 ${left.toLocaleString()} uncertain` : ""}${prunedNote}`;
     if (!aborted) {
       lastSweepSig = currentSig();
     }
     recount();
     renderResults();
-    updateUncertainFlag();
     setSweeping(false);
     saveState();
 
@@ -3097,35 +3063,24 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     clearTimeout(toastT);
     toastT = setTimeout(() => el.toast.classList.remove("show"), 1900);
   }
+  // export the word list only (groups + words); results/favorites are intentionally
+  // left out to keep the payload small. Copies to the clipboard, no file download.
   function exportJSON() {
-    const results = {};
-    resultCache.forEach((v, k) => {
-      results[k] = v;
-    });
     const data = {
       slugseek: 1,
       exported: new Date().toISOString(),
       bothOrders: el.reversed.checked,
       groups,
       words: allWords(),
-      favorites: [...favorites],
-      results,
     };
     const json = JSON.stringify(data, null, 2);
-    try {
-      const blob = new Blob([json], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `slugseek-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1500);
-    } catch (e) {}
+    if (!allWords().length) {
+      toast("nothing to export: add words first");
+      return;
+    }
     navigator.clipboard?.writeText(json).then(
-      () => toast("exported · also copied to clipboard"),
-      () => toast("exported"),
+      () => toast("word list copied to clipboard"),
+      () => toast("copy failed"),
     );
   }
   function applyImport(text) {
@@ -3156,6 +3111,7 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
         if (!groups[2].includes(w)) groups[2].push(w);
       });
     }
+    groupCollapsed = groups.map(() => false);
     activeGroup = groups.length - 1;
     el.reversed.checked = data.bothOrders !== false;
     resultCache = new Map();
@@ -3172,21 +3128,30 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     afterWords();
     saveState();
     toast(
-      `imported ${allWords().length} words${isGrouped() ? ` in ${groups.length} groups` : ""} · ${resultCache.size} cached`,
+      `imported ${allWords().length} words${isGrouped() ? ` in ${groups.length} groups` : ""}`,
     );
     if (pairCount(true) >= 1) sweep();
   }
   el.exportBtn.onclick = exportJSON;
-  el.importBtn.onclick = () => el.importFile.click();
-  el.importFile.onchange = (e) => {
-    const f = e.target.files && e.target.files[0];
-    if (!f) return;
-    const rd = new FileReader();
-    rd.onload = () => {
-      applyImport(String(rd.result));
-      el.importFile.value = "";
-    };
-    rd.readAsText(f);
+  const openImport = () => {
+    el.importText.value = "";
+    el.importModal.classList.add("show");
+    setTimeout(() => el.importText.focus(), 50);
+  };
+  const closeImport = () => el.importModal.classList.remove("show");
+  el.importBtn.onclick = openImport;
+  el.importCancel.onclick = closeImport;
+  el.importModal.addEventListener("click", (e) => {
+    if (e.target === el.importModal) closeImport(); // backdrop click dismisses
+  });
+  el.importDo.onclick = () => {
+    const text = el.importText.value.trim();
+    if (!text) {
+      toast("paste a word list first");
+      return;
+    }
+    closeImport();
+    applyImport(text);
   };
 
   // ===== privacy / terms modal =====
@@ -3220,8 +3185,10 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
   function expandTop() {
     animateTop(false);
   }
-  el.sheetHandle.addEventListener("pointerdown", (e) => {
+  el.resHead.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
+    // let taps on the controls (sort / confirm) work; only drag empty header space
+    if (e.target.closest("button,a,input,select")) return;
     e.preventDefault();
     let startY = e.clientY,
       moved = false;
@@ -3305,7 +3272,7 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
   renderWords();
   updateEstimate();
   reflectGrouped();
-  el.sortbar
+  el.sortgroup
     .querySelectorAll(".sopt")
     .forEach((x) => x.setAttribute("aria-pressed", x.dataset.s === sortMode ? "true" : "false"));
   refreshRunButton();
