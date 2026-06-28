@@ -4,7 +4,7 @@
 
 ### ▸ Live at **[slugseek.com](https://slugseek.com)**
 
-SlugSeek is a fully client-side web tool. You give it words (optionally split into groups), it generates three-word combinations, checks which `.com`s are unregistered, scores each candidate for brandability, and surfaces the best open ones, useful for naming a product, company, or tool.
+SlugSeek is a fully client-side web tool. You give it words (optionally split into groups), it generates word combinations, checks which `.com`s are unregistered, scores each candidate for brandability, and surfaces the best open ones, useful for naming a product, company, or tool.
 
 No backend. No build step. No API keys. No dependencies beyond Google Fonts and three free, CORS-enabled public APIs. It's two static files, `index.html` (the UI) and `engine.js` (the name-finding engine, native ES modules, no bundler), that you can host anywhere static.
 
@@ -42,18 +42,18 @@ To run locally, use any static server (e.g. `npx serve`, then open the served UR
 `engine.js` exports the whole pipeline as plain ES modules: no DOM, no globals, no build step. It runs in the browser and in Node 18+ (which has a global `fetch`):
 
 ```js
-import { findNames } from "./engine.js";
+import { findNames } from './engine.js'
 
 const results = await findNames({
   groups: [
-    ["swift", "bright"],
-    ["lab", "forge"],
+    ['swift', 'bright'],
+    ['lab', 'forge'],
   ],
-  bothOrders: true,   // also try root × modifier
-  confirm: true,      // RDAP-confirm the open candidates (default true)
+  bothOrders: true, // also try root × modifier
+  confirm: true, // RDAP-confirm the open candidates (default true)
   maxCombos: 10000,
   onProgress: (done, total) => {}, // optional
-});
+})
 // → [{ domain, a, b, dns, state, score: { score, syl, len, flags, breakdown } }, …]
 //   sorted best-first by brandability score
 ```
@@ -88,8 +88,14 @@ Output is `{ ok, count, total, config, results }`, where each result is `{ domai
   "total": 8,
   "config": { "bothOrders": true, "confirm": true, "maxCombos": 10000 },
   "results": [
-    { "domain": "swiftforge.com", "parts": ["swift", "forge"],
-      "dns": "clear", "rdap": { "state": "open" }, "state": "open", "score": 90 }
+    {
+      "domain": "swiftforge.com",
+      "parts": ["swift", "forge"],
+      "dns": "clear",
+      "rdap": { "state": "open" },
+      "state": "open",
+      "score": 90
+    }
   ]
 }
 ```
@@ -109,6 +115,7 @@ It's two static files, `index.html` and `engine.js`, that must be served from th
 WHOIS was sunset in January 2025. **RDAP** is now the ICANN-mandated, CORS-enabled, JSON authoritative source for domain registration data, and that CORS support is what lets a browser do authoritative availability checks with no server. SlugSeek leans on this: DNS-over-HTTPS for a fast first pass, RDAP for the confirmed answer.
 
 **Endpoints used (all free, no-key, CORS-enabled):**
+
 - DNS-over-HTTPS: `dns.google` (Cloudflare fallback)
 - RDAP: `rdap.verisign.com`
 - Related-word suggestions: `api.datamuse.com`
@@ -119,7 +126,7 @@ WHOIS was sunset in January 2025. **RDAP** is now the ICANN-mandated, CORS-enabl
 
 - **`.com` only** (by design: exact-match `.com` carries the most trust).
 - Free, no-SLA public APIs: they can throttle or change behavior without notice.
-- NXDOMAIN/RDAP-404 means *unregistered*, not necessarily *buyable*: premium/reserved names can be unregistered yet not freely purchasable. No pricing or premium flag is surfaced.
+- NXDOMAIN/RDAP-404 means _unregistered_, not necessarily _buyable_: premium/reserved names can be unregistered yet not freely purchasable. No pricing or premium flag is surfaced.
 - The brandability score is mechanical; it can't judge meaning or trademark risk. It surfaces and ranks candidates and flags traps, but the final call is yours.
 
 ---
