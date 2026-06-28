@@ -820,6 +820,11 @@ button.run:disabled {
 .star.on {
   color: var(--yellow);
 }
+/* per-row status chip + sheet trigger: mobile only (shown in the <=560px media
+   query); hidden on desktop, which keeps its inline tag/score/actions */
+.rdetail {
+  display: none;
+}
 .flag.fav {
   font-size: 13px;
   line-height: 1;
@@ -943,16 +948,70 @@ button.run:disabled {
   .keybar .tiers {
     display: none;
   }
-  /* keep result rows inline (glyph · domain · tag · actions), like desktop */
+  /* Mobile rows: name gets all the room, the favorite star stays inline, and
+     the rest folds into one fixed-width status chip that opens the detail
+     sheet. The chip box is a constant width, so a row's footprint does not
+     change when "confirm all open" flips its state (clear -> go/taken). */
   .row {
+    grid-template-columns: 1fr auto auto;
     gap: 6px 8px;
     padding: 7px 8px;
   }
-  .tag {
-    min-width: 0;
+  .row > .g,
+  .row > .tag,
+  .row > .detail {
+    display: none;
   }
-  .racts {
-    gap: 4px;
+  /* keep only the star from the action cluster inline; the rest lives in the sheet */
+  .racts > .score,
+  .racts > .rb,
+  .racts > .ricn {
+    display: none;
+  }
+  .star {
+    font-size: 18px;
+    padding: 4px 6px;
+  }
+  .rdetail {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-width: 96px;
+    padding: 7px 9px;
+    font-family: inherit;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--dim);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .rdetail .chev {
+    color: var(--faint);
+    font-size: 13px;
+    line-height: 1;
+  }
+  .rdetail.clear {
+    color: var(--green);
+    border-color: rgba(70, 240, 160, 0.3);
+  }
+  .rdetail.go {
+    color: var(--green-hi);
+    border-color: rgba(70, 240, 160, 0.45);
+    background: rgba(70, 240, 160, 0.08);
+  }
+  .rdetail.taken {
+    color: var(--red);
+  }
+  .rdetail.unknown {
+    color: var(--yellow);
+    border-color: rgba(220, 200, 90, 0.35);
+  }
+  .rdetail.pending {
+    color: var(--dim);
   }
   /* tighten the sort nav so options stay on one line */
   .sortbar {
@@ -1110,6 +1169,124 @@ button.run:disabled {
   color: #fff;
 }
 
+/* mobile per-row detail/action sheet (bottom sheet) + dimming backdrop */
+.rowsheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 75;
+  background: rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s;
+}
+.rowsheet-backdrop.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+.rowsheet {
+  position: fixed;
+  z-index: 76;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg);
+  border-top: 1px solid var(--border-hi);
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 -18px 40px -16px #000;
+  padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+  max-height: 80vh;
+  overflow-y: auto;
+  transform: translateY(110%);
+  transition: transform 0.22s ease;
+}
+.rowsheet.show {
+  transform: translateY(0);
+}
+.rs-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.rs-dom {
+  font-size: 18px;
+  color: var(--fg);
+  word-break: break-all;
+  user-select: text;
+}
+.rs-dom .tld {
+  color: var(--dim);
+}
+.rs-x {
+  flex: none;
+  background: transparent;
+  border: 0;
+  color: var(--faint);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+.rs-status {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  margin-bottom: 12px;
+  color: var(--dim);
+}
+.rs-status.clear {
+  color: var(--green);
+}
+.rs-status.go {
+  color: var(--green-hi);
+}
+.rs-status.taken {
+  color: var(--red);
+}
+.rs-status.unknown {
+  color: var(--yellow);
+}
+.rs-score {
+  font-size: 11.5px;
+  margin-bottom: 12px;
+}
+.rowsheet .detail {
+  margin-bottom: 12px;
+}
+.rs-acts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.rs-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 10px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--fg);
+  cursor: pointer;
+  text-decoration: none;
+}
+.rs-btn.buy {
+  color: var(--green-hi);
+  border-color: rgba(70, 240, 160, 0.45);
+}
+.rs-btn.confirm {
+  color: var(--accent);
+}
+.rs-btn.fav.on {
+  color: var(--yellow);
+  border-color: var(--yellow);
+}
+.rs-btn.wide {
+  grid-column: 1 / -1;
+}
 .scorepanel {
   position: fixed;
   z-index: 70;
@@ -1433,6 +1610,8 @@ button.run:disabled {
   </div>
 </div>
 <div class="scorepanel" id="scorePanel"></div>
+<div class="rowsheet-backdrop" id="rowSheetBackdrop"></div>
+<div class="rowsheet" id="rowSheet" role="dialog" aria-modal="true" aria-label="domain details"></div>
 <input type="file" id="importFile" accept="application/json,.json" style="display:none" />
 
 <script type="module">
@@ -1486,6 +1665,8 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     popRemove: $("popRemove"),
     popChips: $("popChips"),
     scorePanel: $("scorePanel"),
+    rowSheet: $("rowSheet"),
+    rowSheetBackdrop: $("rowSheetBackdrop"),
     toast: $("toast"),
     undoBtn: $("undoBtn"),
   };
@@ -2314,12 +2495,12 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     scorePanelFor = null;
     el.scorePanel.classList.remove("show");
   }
-  function showScorePanel(badge, sc, domain) {
-    scorePanelFor = badge;
-    const tierWord = sc.score >= 80 ? "strong" : sc.score >= 65 ? "decent" : "weak";
+  // score tier + breakdown body, shared by the desktop popover and the mobile sheet
+  const scoreTierWord = (n) => (n >= 80 ? "strong" : n >= 65 ? "decent" : "weak");
+  const scoreTierClass = (n) => (n >= 80 ? "hi" : n >= 65 ? "mid" : "lo");
+  function scoreBodyHTML(sc) {
     const rows = sc.breakdown
       .map((b) => {
-        const sign = b.delta > 0 ? "+" : b.delta < 0 ? "" : "";
         const cls = "sp-" + b.kind;
         return `<div class="sp-row ${cls}"><span class="sp-d">${b.delta > 0 ? "+" : ""}${b.delta}</span><span class="sp-l">${b.label}</span></div>`;
       })
@@ -2332,14 +2513,20 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     const flagline = sc.flags.length
       ? `<div class="sp-flags">\u26a0 ${sc.flags.join(", ")}</div>`
       : "";
-    el.scorePanel.innerHTML =
-      `<div class="sp-head"><span class="sp-dom">${domain}</span><span class="sp-score ${sc.score >= 80 ? "hi" : sc.score >= 65 ? "mid" : "lo"}">${sc.score}<span class="sp-of">/100 \u00b7 ${tierWord}</span></span></div>` +
+    return (
       metrics +
       `<div class="sp-list">${rows}</div>` +
       (sc.raw !== sc.score
         ? `<div class="sp-raw">raw ${sc.raw} \u2192 clamped ${sc.score}</div>`
         : "") +
-      flagline;
+      flagline
+    );
+  }
+  function showScorePanel(badge, sc, domain) {
+    scorePanelFor = badge;
+    el.scorePanel.innerHTML =
+      `<div class="sp-head"><span class="sp-dom">${domain}</span><span class="sp-score ${scoreTierClass(sc.score)}">${sc.score}<span class="sp-of">/100 \u00b7 ${scoreTierWord(sc.score)}</span></span></div>` +
+      scoreBodyHTML(sc);
     el.scorePanel.classList.add("show");
     // position above/below the badge
     const r = badge.getBoundingClientRect();
@@ -2354,6 +2541,71 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     p.style.left = left + "px";
     p.style.top = top + "px";
   }
+
+  // ===== mobile per-row detail/action sheet =====
+  let rowSheetFor = null;
+  const RS_STATUS = {
+    pending: "checking…",
+    clear: "open (unconfirmed)",
+    go: "open · confirmed",
+    taken: "taken",
+    unknown: "status unknown",
+  };
+  function closeRowSheet() {
+    rowSheetFor = null;
+    el.rowSheet.classList.remove("show");
+    el.rowSheetBackdrop.classList.remove("show");
+  }
+  function openRowSheet(d) {
+    rowSheetFor = d;
+    const s = stateOf(d);
+    const m = d.domain.match(/^(.*)(\.com)$/);
+    const label = m ? m[1] : d.domain;
+    let html =
+      `<div class="rs-head"><span class="rs-dom">${label}<span class="tld">.com</span></span><button class="rs-x" aria-label="close">✕</button></div>` +
+      `<div class="rs-status ${s}">${d.verifying ? "checking…" : RS_STATUS[s] || s}</div>`;
+    if (s === "clear" || s === "go") {
+      const sc = scoreOf(d);
+      html +=
+        `<div class="rs-score"><div class="sp-head"><span class="sp-dom">brandability</span>` +
+        `<span class="sp-score ${scoreTierClass(sc.score)}">${sc.score}<span class="sp-of">/100 · ${scoreTierWord(sc.score)}</span></span></div>` +
+        `${scoreBodyHTML(sc)}</div>`;
+    }
+    if (s === "taken" && d.rdap && d.rdap.info) {
+      const i = d.rdap.info;
+      html += `<div class="detail"><span class="k">registrar</span><span class="v">${i.registrar}</span><span class="k">created</span><span class="v">${i.created}</span><span class="k">expires</span><span class="v">${i.expires}</span><span class="k">status</span><span class="v">${i.status}</span></div>`;
+    }
+    let acts = "";
+    if (s === "clear" || s === "unknown") {
+      acts += `<button class="rs-btn confirm" data-act="confirm"${d.verifying ? " disabled" : ""}>${d.verifying ? "confirming…" : "confirm"}</button>`;
+    } else if (s === "go") {
+      acts += `<a class="rs-btn buy" href="${BUY_URL(d.domain)}" target="_blank" rel="noopener">register ↗</a>`;
+    }
+    // favoriting lives inline on the row (star); the sheet holds confirm/register + copy
+    acts += `<button class="rs-btn copy${acts ? "" : " wide"}" data-act="copy">copy</button>`;
+    html += `<div class="rs-acts">${acts}</div>`;
+    el.rowSheet.innerHTML = html;
+    el.rowSheet.querySelector(".rs-x").onclick = closeRowSheet;
+    const cfBtn = el.rowSheet.querySelector('[data-act="confirm"]');
+    if (cfBtn)
+      cfBtn.onclick = async () => {
+        await verify(d, false);
+        if (rowSheetFor === d) openRowSheet(d); // refresh with the new state
+      };
+    const cpBtn = el.rowSheet.querySelector('[data-act="copy"]');
+    if (cpBtn)
+      cpBtn.onclick = () => {
+        navigator.clipboard?.writeText(d.domain);
+        cpBtn.textContent = "ok";
+        setTimeout(() => (cpBtn.textContent = "copy"), 900);
+      };
+    el.rowSheet.classList.add("show");
+    el.rowSheetBackdrop.classList.add("show");
+  }
+  el.rowSheetBackdrop.onclick = closeRowSheet;
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && rowSheetFor) closeRowSheet();
+  });
 
   function buildRowNode(d) {
     const s = stateOf(d);
@@ -2421,6 +2673,18 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
       setTimeout(() => (cp.textContent = "copy"), 900);
     };
     act.appendChild(cp);
+    // mobile-only status chip: consolidates tag + actions into one fixed-width
+    // tap target that opens the detail sheet (CSS hides it on desktop)
+    const chip = document.createElement("button");
+    chip.className = "rdetail " + s;
+    const chipLabel = d.verifying ? "rdap…" : (TAG[s] || TAG.pending).replace(/[[\]]/g, "").trim();
+    chip.innerHTML = `<span class="rlabel">${chipLabel}</span><span class="chev">›</span>`;
+    chip.setAttribute("aria-label", "details for " + d.domain);
+    chip.onclick = (e) => {
+      e.stopPropagation();
+      openRowSheet(d);
+    };
+    node.appendChild(chip);
     if (s === "taken" && d.rdap && d.rdap.info) {
       const det = document.createElement("div");
       det.className = "detail";
