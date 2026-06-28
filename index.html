@@ -1,0 +1,3051 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>SlugSeek: find available .com domains by combining words</title>
+<meta name="description" content="SlugSeek combines words pairwise, checks .com availability live (DNS + RDAP), and scores each candidate for brandability. Fully client-side, no backend." />
+<meta name="theme-color" content="#05060a" />
+<meta property="og:title" content="SlugSeek" />
+<meta property="og:description" content="Find available .com domains by combining words, with live availability checks and brandability scoring." />
+<meta property="og:type" content="website" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2305060a'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='%234fd0e0' font-family='monospace'%3E%3E%3C/text%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --page: #05060a;
+  --bg: #0a0c12;
+  --bg3: #161a26;
+  --border: #283044;
+  --border-hi: #3a445c;
+  --fg: #c7cddc;
+  --dim: #6c7388;
+  --faint: #454c61;
+  --green: #6fdc8c;
+  --green-hi: #46f0a0;
+  --red: #ff6b78;
+  --yellow: #f0c05a;
+  --accent: #4fd0e0;
+  --rad: 5px;
+}
+* {
+  box-sizing: border-box;
+}
+html {
+  height: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  height: 100svh;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--page);
+  color: var(--fg);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13.5px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  justify-content: center;
+}
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+button {
+  font-family: inherit;
+}
+::selection {
+  background: rgba(79, 208, 224, 0.25);
+}
+
+.term {
+  width: 100%;
+  max-width: 880px;
+  height: 100svh;
+  height: 100dvh;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 12px 13px 6px;
+}
+.topZone {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  overflow: hidden;
+  transition:
+    max-height 0.42s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.28s ease;
+}
+.topZone.collapsed {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  margin-bottom: 9px;
+}
+.mast .snail {
+  font-size: 17px;
+  line-height: 1;
+  margin-right: -2px;
+}
+.mast .name {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+}
+.mast .name .tld {
+  color: var(--accent);
+}
+.mast .sub {
+  color: var(--dim);
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mast .grow {
+  flex: 1;
+}
+.tbtn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--dim);
+  border-radius: 4px;
+  padding: 4px 9px;
+  font-size: 11.5px;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.tbtn[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.tbtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.cmd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--rad);
+  padding: 6px 8px;
+  flex: none;
+}
+.cmd:focus-within {
+  border-color: var(--accent);
+}
+.cmd .ps {
+  font-weight: 700;
+  flex: none;
+  color: var(--accent);
+}
+.cmd .gtag {
+  flex: none;
+  font-size: 11px;
+  color: var(--bg);
+  background: var(--accent);
+  border-radius: 3px;
+  padding: 1px 6px;
+  display: none;
+}
+.cmd.grouped .gtag {
+  display: inline-block;
+}
+.cmd input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 16px;
+  caret-color: var(--accent);
+}
+.cmd input::placeholder {
+  color: var(--faint);
+}
+.cmd .add {
+  flex: none;
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 4px;
+  padding: 6px 13px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.panel {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--rad);
+  padding: 13px 11px 10px;
+}
+.panel > .ptitle {
+  position: absolute;
+  top: -8px;
+  left: 11px;
+  background: var(--bg);
+  padding: 0 7px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 50%;
+  z-index: 3;
+}
+.panel > .pright {
+  position: absolute;
+  top: -9px;
+  right: 10px;
+  background: var(--bg);
+  padding: 0 5px;
+  display: inline-flex;
+  gap: 6px;
+  z-index: 4;
+}
+.ptitle .cnt {
+  color: var(--faint);
+}
+.panel.words {
+  flex: none;
+  margin-top: 16px;
+}
+.wordChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  max-height: clamp(56px, 17vh, 150px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+  z-index: 1;
+}
+.wordChips.grouped {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 0;
+  max-height: clamp(120px, 32vh, 280px);
+}
+
+.chip.word {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+  font-size: 13px;
+  padding: 6px 11px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  transition:
+    border-color 0.12s,
+    background 0.12s;
+  white-space: nowrap;
+}
+.chip.word:active {
+  cursor: grabbing;
+}
+.chip.word.dragging {
+  opacity: 0.3;
+  pointer-events: none;
+}
+.drag-ghost {
+  position: fixed;
+  z-index: 90;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(1.05);
+  opacity: 0.97;
+  border-color: var(--accent);
+  box-shadow: 0 10px 26px -8px #000;
+}
+
+.chip.sug {
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg3);
+  padding: 5px 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--fg);
+  cursor: pointer;
+  transition: transform 0.06s;
+}
+.chip.sug:active {
+  transform: scale(0.96);
+}
+.chip.sug .mk {
+  color: var(--accent);
+  font-weight: 700;
+}
+.chip.sug.added {
+  background: rgba(70, 240, 160, 0.14);
+  border-color: rgba(70, 240, 160, 0.5);
+  color: var(--green);
+}
+.chip.sug.added .mk {
+  color: var(--green);
+}
+@keyframes sugpop {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(70, 240, 160, 0);
+  }
+  32% {
+    transform: scale(1.13);
+    box-shadow: 0 0 0 6px rgba(70, 240, 160, 0.22);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(70, 240, 160, 0);
+  }
+}
+.chip.sug.justadded {
+  animation: sugpop 0.42s cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+.empty-mini {
+  color: var(--faint);
+  font-size: 12px;
+}
+.empty-mini a {
+  border-bottom: 1px dotted rgba(79, 208, 224, 0.4);
+  cursor: pointer;
+}
+
+.lane {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition:
+    background 0.18s,
+    border-color 0.18s;
+  cursor: pointer;
+}
+.lane.active {
+  background: rgba(79, 208, 224, 0.06);
+  border-color: rgba(79, 208, 224, 0.3);
+}
+.lane.drop {
+  background: rgba(79, 208, 224, 0.13);
+  border-color: var(--accent);
+}
+.lane-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding-top: 3px;
+  width: 20px;
+  cursor: grab;
+  touch-action: none;
+}
+.lane-head:active {
+  cursor: grabbing;
+}
+.lane-grip {
+  font-size: 11px;
+  color: var(--faint);
+  line-height: 1;
+}
+.lane.active .lane-grip {
+  color: var(--accent);
+}
+.lane-bar {
+  width: 3px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--border-hi);
+}
+.lane.active .lane-bar {
+  background: var(--accent);
+}
+.lane-n {
+  font-size: 10px;
+  color: var(--faint);
+  font-weight: 700;
+}
+.lane.active .lane-n {
+  color: var(--accent);
+}
+.lane.lane-dragging {
+  opacity: 0.35;
+}
+.lane-ghost {
+  position: fixed;
+  z-index: 95;
+  pointer-events: none;
+  transform: translate(-14px, -14px) scale(1.02);
+  opacity: 0.96;
+  background: var(--bg3);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 8px;
+  box-shadow: 0 12px 30px -10px #000;
+}
+.lane.lane-drop-above {
+  box-shadow: 0 -3px 0 -1px var(--accent);
+}
+.lane.lane-drop-below {
+  box-shadow: 0 3px 0 -1px var(--accent);
+}
+.lane-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+  min-height: 30px;
+  align-content: flex-start;
+}
+.lane-del {
+  background: transparent;
+  border: 0;
+  color: var(--faint);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px 7px;
+  flex: none;
+  align-self: center;
+}
+.lane-add {
+  margin-top: 6px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--dim);
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  width: 100%;
+}
+.lane-add:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  flex: none;
+  margin-top: 13px;
+}
+button.run {
+  background: var(--accent);
+  color: var(--bg);
+  border: 0;
+  border-radius: var(--rad);
+  font-weight: 700;
+  font-size: 13.5px;
+  padding: 9px 17px;
+  cursor: pointer;
+}
+button.run.stopping {
+  background: var(--red);
+}
+button.run.ischanged {
+  background: var(--green-hi);
+}
+button.run:active {
+  transform: translateY(1px);
+}
+button.run:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--dim);
+  font-size: 12.5px;
+}
+.chk input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.box {
+  width: 15px;
+  height: 15px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  font-size: 11px;
+  flex: none;
+}
+.box::after {
+  content: "";
+  opacity: 0;
+}
+.chk input:checked + .box::after {
+  content: "x";
+  opacity: 1;
+}
+.est {
+  color: var(--faint);
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.readout {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  flex: none;
+  margin-top: 11px;
+  font-size: 12.5px;
+}
+.readout.show {
+  display: flex;
+}
+.bar {
+  color: var(--accent);
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.readout .pct,
+.readout .seg {
+  color: var(--dim);
+}
+
+.notice {
+  display: none;
+  flex: none;
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: var(--yellow);
+  line-height: 1.5;
+}
+.notice.show {
+  display: block;
+}
+.notice div {
+  margin: 2px 0;
+}
+.banner {
+  display: none;
+  flex: none;
+  margin-top: 11px;
+  padding: 10px 12px;
+  border-radius: var(--rad);
+  font-size: 12px;
+  line-height: 1.5;
+  border: 1px solid rgba(255, 107, 120, 0.32);
+  background: rgba(255, 107, 120, 0.07);
+  color: #ffd2d6;
+}
+.banner.show {
+  display: block;
+}
+.banner b {
+  color: #fff;
+}
+
+.panel.results {
+  flex: 1;
+  min-height: 0;
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+}
+.panel.results > .body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sheet-handle {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 3px 0 10px;
+  margin-top: -2px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  flex: none;
+}
+.sheet-handle:active {
+  cursor: grabbing;
+}
+.sheet-handle .grip {
+  width: 42px;
+  height: 4px;
+  border-radius: 3px;
+  background: var(--border-hi);
+  transition:
+    background 0.15s,
+    width 0.15s;
+}
+.flags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: none;
+  margin-bottom: 10px;
+}
+.flag {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--dim);
+  border-radius: 4px;
+  padding: 5px 9px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.flag span {
+  color: var(--faint);
+}
+.flag[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(79, 208, 224, 0.1);
+}
+.flag[aria-pressed="true"] span {
+  color: var(--accent);
+}
+.vall {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid rgba(70, 240, 160, 0.4);
+  color: var(--green);
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.vall:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.rows {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 2px;
+}
+.row {
+  display: grid;
+  grid-template-columns: 15px 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+}
+.g {
+  justify-self: center;
+  font-weight: 700;
+}
+.g.pending {
+  color: var(--dim);
+  opacity: 0.6;
+}
+.g.clear {
+  color: var(--green);
+}
+.g.go {
+  color: var(--green-hi);
+}
+.g.taken {
+  color: var(--red);
+  opacity: 0.7;
+}
+.g.unknown {
+  color: var(--yellow);
+}
+.dom {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+.dom .tld {
+  color: var(--dim);
+}
+.row.taken .dom {
+  color: var(--dim);
+}
+.tag {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-align: center;
+  min-width: 70px;
+  white-space: nowrap;
+}
+.tag.pending {
+  color: var(--dim);
+}
+.tag.clear {
+  color: var(--green);
+}
+.tag.go {
+  color: var(--bg);
+  background: var(--green-hi);
+  border-radius: 3px;
+  font-weight: 700;
+}
+.tag.taken {
+  color: var(--red);
+}
+.tag.unknown {
+  color: var(--yellow);
+}
+.racts {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.rb {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--fg);
+}
+.rb.confirm {
+  color: var(--accent);
+}
+.rb.buy {
+  color: var(--green);
+  border-color: rgba(70, 240, 160, 0.4);
+}
+.rb:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ricn {
+  background: transparent;
+  border: 0;
+  color: var(--faint);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px;
+}
+.score {
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 3px;
+  padding: 2px 6px;
+  min-width: 30px;
+  text-align: center;
+  border: 1px solid var(--border);
+  letter-spacing: 0.02em;
+  cursor: default;
+  white-space: nowrap;
+}
+.score.hi {
+  color: var(--green-hi);
+  border-color: rgba(70, 240, 160, 0.45);
+  background: rgba(70, 240, 160, 0.08);
+}
+.score.mid {
+  color: var(--accent);
+  border-color: rgba(79, 208, 224, 0.4);
+  background: rgba(79, 208, 224, 0.07);
+}
+.score.lo {
+  color: var(--dim);
+  border-color: var(--border);
+}
+.score .warn {
+  color: var(--yellow);
+  margin-left: 3px;
+  font-weight: 400;
+}
+.star {
+  background: transparent;
+  border: 0;
+  color: var(--faint);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 3px;
+  flex: none;
+}
+.star.on {
+  color: var(--yellow);
+}
+.flag.fav {
+  font-size: 13px;
+  line-height: 1;
+}
+.flag.fav[aria-pressed="true"] {
+  color: var(--yellow);
+  border-color: var(--yellow);
+  background: rgba(240, 192, 90, 0.1);
+}
+.flag.fav[aria-pressed="true"] span {
+  color: var(--yellow);
+}
+.sortbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  margin-bottom: 10px;
+}
+.sortbar .sortlabel {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-right: 2px;
+}
+.sortbar .grow {
+  flex: 1;
+}
+.sopt {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--dim);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.sopt[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(79, 208, 224, 0.08);
+}
+.detail {
+  grid-column: 1/-1;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  font-size: 11.5px;
+  color: var(--dim);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 14px;
+}
+.detail .k {
+  color: var(--faint);
+}
+.detail .v {
+  color: var(--fg);
+  word-break: break-word;
+}
+.res-empty {
+  color: var(--dim);
+  font-size: 12px;
+  padding: 6px 2px;
+  flex: none;
+}
+.show-more {
+  flex: none;
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--dim);
+  border-radius: 4px;
+  padding: 9px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-top: 2px;
+}
+
+.keybar {
+  display: flex;
+  gap: 6px 14px;
+  align-items: center;
+  flex: none;
+  padding: 7px 13px;
+  padding-bottom: calc(7px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--bg3);
+  color: var(--dim);
+  font-size: 11px;
+}
+.keybar .k {
+  color: var(--bg);
+  background: var(--dim);
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-right: 5px;
+  font-weight: 700;
+}
+.keybar .kbtn {
+  color: var(--dim);
+  background: transparent;
+  border: 0;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+}
+.keybar .kbtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.keybar .grow {
+  flex: 1;
+}
+.keybar .tiers {
+  color: var(--faint);
+  white-space: nowrap;
+}
+@media (max-width: 560px) {
+  .keybar .tiers {
+    display: none;
+  }
+  /* keep result rows inline (glyph · domain · tag · actions), like desktop */
+  .row {
+    gap: 6px 8px;
+    padding: 7px 8px;
+  }
+  .tag {
+    min-width: 0;
+  }
+  .racts {
+    gap: 4px;
+  }
+  /* tighten the sort nav so options stay on one line */
+  .sortbar {
+    gap: 5px;
+  }
+  .sortbar .sortlabel {
+    display: none;
+  }
+  .sopt {
+    padding: 4px 8px;
+    white-space: nowrap;
+  }
+}
+
+.pop {
+  position: fixed;
+  z-index: 50;
+  display: none;
+  width: min(280px, calc(100vw - 24px));
+  background: var(--bg);
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  box-shadow: 0 18px 40px -16px #000;
+  padding: 10px;
+}
+.pop.show {
+  display: block;
+}
+.pop .phead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.pop .ptit {
+  font-size: 13px;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pop .pclose {
+  margin-left: auto;
+  background: transparent;
+  border: 0;
+  color: var(--faint);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.menu-remove {
+  width: 100%;
+  background: transparent;
+  border: 1px solid rgba(255, 107, 120, 0.4);
+  color: var(--red);
+  border-radius: 5px;
+  padding: 8px;
+  font-size: 12.5px;
+  cursor: pointer;
+  margin-bottom: 11px;
+}
+.menu-label {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 8px;
+}
+.pop .pchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 190px;
+  overflow-y: auto;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 54px;
+  transform: translateX(-50%) translateY(8px);
+  z-index: 60;
+  background: var(--bg3);
+  border: 1px solid var(--border-hi);
+  color: var(--fg);
+  font-size: 12px;
+  padding: 7px 14px;
+  border-radius: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.18s,
+    transform 0.18s;
+  text-align: center;
+  max-width: 90vw;
+}
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 16px;
+}
+.modal.show {
+  display: flex;
+}
+.modal-card {
+  width: min(440px, 100%);
+  max-height: 82vh;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border-hi);
+  border-radius: 8px;
+  box-shadow: 0 20px 50px -20px #000;
+  padding: 15px 18px 18px;
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.modal-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+.modal-head .pclose {
+  margin-left: auto;
+}
+.modal-body {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--fg);
+}
+.modal-body p {
+  margin: 0 0 10px;
+}
+.modal-body h4 {
+  margin: 14px 0 5px;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.modal-body b {
+  color: #fff;
+}
+
+.scorepanel {
+  position: fixed;
+  z-index: 70;
+  display: none;
+  width: min(280px, calc(100vw - 24px));
+  background: var(--bg);
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  box-shadow: 0 18px 40px -16px #000;
+  padding: 10px 11px;
+  font-size: 11.5px;
+}
+.scorepanel.show {
+  display: block;
+}
+.sp-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--border);
+}
+.sp-dom {
+  font-size: 13px;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sp-score {
+  font-size: 16px;
+  font-weight: 700;
+  flex: none;
+}
+.sp-score.hi {
+  color: var(--green-hi);
+}
+.sp-score.mid {
+  color: var(--accent);
+}
+.sp-score.lo {
+  color: var(--dim);
+}
+.sp-score .sp-of {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--faint);
+  margin-left: 2px;
+}
+.sp-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  color: var(--dim);
+  font-size: 10.5px;
+  margin-bottom: 8px;
+}
+.sp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sp-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.sp-d {
+  flex: none;
+  width: 26px;
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.sp-l {
+  color: var(--fg);
+  flex: 1;
+}
+.sp-good .sp-d {
+  color: var(--green);
+}
+.sp-bad .sp-d {
+  color: var(--red);
+}
+.sp-info .sp-d {
+  color: var(--dim);
+}
+.sp-base .sp-d {
+  color: var(--accent);
+}
+.sp-base .sp-l {
+  color: var(--dim);
+}
+.sp-raw {
+  margin-top: 7px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+  color: var(--faint);
+  font-size: 10.5px;
+}
+.sp-flags {
+  margin-top: 6px;
+  color: var(--yellow);
+  font-size: 10.5px;
+}
+
+@media (hover: hover) {
+  .tbtn:hover {
+    color: var(--fg);
+    border-color: var(--border-hi);
+  }
+  .tbtn.danger:hover {
+    color: var(--red);
+    border-color: rgba(255, 107, 120, 0.5);
+  }
+  .tbtn[aria-pressed="true"]:hover {
+    color: var(--accent);
+  }
+  .cmd .add:hover {
+    background: var(--accent);
+    color: var(--bg);
+  }
+  .chip.word:hover {
+    border-color: var(--border-hi);
+  }
+  .chip.sug:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+  }
+  .chip.sug:hover .mk {
+    color: var(--bg);
+  }
+  .chip.sug.added:hover {
+    background: var(--red);
+    border-color: var(--red);
+    color: var(--bg);
+  }
+  .chip.sug.added:hover .mk {
+    color: var(--bg);
+  }
+  .lane-del:hover {
+    color: var(--red);
+  }
+  .lane-add:hover {
+    color: var(--fg);
+    border-color: var(--border-hi);
+  }
+  .menu-remove:hover {
+    background: rgba(255, 107, 120, 0.08);
+  }
+  .flag[aria-pressed="false"]:hover {
+    color: var(--fg);
+  }
+  .vall:hover {
+    background: rgba(70, 240, 160, 0.08);
+  }
+  .sopt[aria-pressed="false"]:hover {
+    color: var(--fg);
+    border-color: var(--border-hi);
+  }
+  .star:hover {
+    color: var(--yellow);
+  }
+  .flag.fav[aria-pressed="false"]:hover {
+    color: var(--yellow);
+  }
+  .rb.confirm:hover {
+    border-color: var(--accent);
+  }
+  .rb.buy:hover {
+    background: rgba(70, 240, 160, 0.08);
+  }
+  .ricn:hover {
+    color: var(--fg);
+  }
+  .pclose:hover {
+    color: var(--fg);
+  }
+  .show-more:hover {
+    color: var(--fg);
+    border-color: var(--border-hi);
+  }
+  button.run:hover {
+    filter: brightness(1.08);
+  }
+  .keybar .kbtn:hover:not(:disabled) {
+    color: var(--fg);
+  }
+  .sheet-handle:hover .grip {
+    background: var(--dim);
+    width: 52px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+</style>
+</head>
+<body>
+<div class="term">
+  <div class="screen">
+    <div class="topZone" id="topZone">
+    <div class="mast">
+      <span class="snail" aria-hidden="true">🐌</span>
+      <span class="name">slugseek<span class="tld">.com</span></span>
+<span class="sub">word-combo .com finder + brandability scoring</span>
+      <span class="grow"></span>
+      <button class="tbtn" id="exportBtn">export</button>
+      <button class="tbtn" id="importBtn">import</button>
+    </div>
+
+    <div class="cmd" id="cmd">
+      <span class="ps">&#10095;</span>
+      <span class="gtag" id="gtag"></span>
+      <input id="wordInput" type="text" placeholder="type a word, press enter…" autocomplete="off" autocapitalize="none" spellcheck="false" />
+      <button class="add" id="addBtn">add</button>
+    </div>
+
+    <div class="panel words">
+      <span class="ptitle">word&nbsp;list&nbsp;<span class="cnt" id="wordCount">(0)</span></span>
+      <span class="pright">
+        <button class="tbtn" id="groupBtn" aria-pressed="false">group</button>
+        <button class="tbtn danger" id="clearWords">clear all</button>
+      </span>
+      <div class="wordChips" id="wordChips"></div>
+    </div>
+
+    <div class="actions">
+      <button class="run" id="runBtn">&#9656; search</button>
+      <label class="chk" id="bothOrdersChk"><input type="checkbox" id="reversed" checked /><span class="box"></span><span>--both-orders</span></label>
+      <span class="est" id="est"></span>
+    </div>
+
+    <div class="readout" id="readout"><span class="bar" id="bar"></span><span class="pct" id="pct"></span><span class="seg" id="seg"></span></div>
+    <div class="notice" id="notice"></div>
+    <div class="banner" id="netBanner"></div>
+    </div><!-- /topZone -->
+
+    <div class="panel results" id="resPanel" style="display:none">
+      <span class="ptitle">results</span>
+      <div class="body">
+        <div class="sheet-handle" id="sheetHandle"><span class="grip"></span></div>
+        <div class="flags" id="flags">
+          <button class="flag" data-f="open"    aria-pressed="true">--open <span id="cOpen">0</span></button>
+          <button class="flag" data-f="all"     aria-pressed="false">--all <span id="cAll">0</span></button>
+          <button class="flag" data-f="taken"   aria-pressed="false">--taken <span id="cTaken">0</span></button>
+          <button class="flag" data-f="unknown" aria-pressed="false" style="display:none">--uncertain <span id="cUnknown">0</span></button>
+          <button class="flag fav" id="favFilter" aria-pressed="false">&#9733; <span id="cFav">0</span></button>
+          <button class="vall" id="verifyAll">[ confirm all open ]</button>
+        </div>
+        <div class="sortbar">
+          <span class="sortlabel">sort</span>
+          <button class="sopt" data-s="score" aria-pressed="true">score</button>
+          <button class="sopt" data-s="default" aria-pressed="false">original</button>
+          <button class="sopt" data-s="az"    aria-pressed="false">a&#8211;z</button>
+        </div>
+        <div class="res-empty" id="resEmpty"></div>
+        <div class="rows" id="rows"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="keybar">
+    <button class="kbtn" id="undoBtn" disabled>&#8634; undo</button>
+    <span><span class="k">enter</span>add</span>
+    <span><span class="k">&#8984;&#9166;</span>run</span>
+    <span class="grow"></span>
+    <button class="kbtn" id="aboutBtn">privacy</button>
+    <span class="tiers">drag a word to move · tap for options</span>
+  </div>
+</div>
+
+<div class="pop" id="pop">
+  <div class="phead"><span class="ptit" id="popTitle"></span><button class="pclose" id="popClose">&times;</button></div>
+  <button class="menu-remove" id="popRemove">remove word</button>
+  <div class="menu-label">related: tap to add</div>
+  <div class="pchips" id="popChips"></div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="modal" id="aboutModal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <span class="modal-title">🐌 about slugseek</span>
+      <button class="pclose" id="aboutClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <h4>Privacy</h4>
+      <p>
+        <b>Your stuff stays yours.</b> SlugSeek runs entirely in your browser. There's no
+        server, no account, no sign-up, no tracking, and no analytics. We never see the words
+        you type or the domains you check. There's genuinely no "us" on the other end.
+      </p>
+      <p>
+        To check availability, your browser makes the same kind of lookups any website does:
+        DNS queries to Google and Cloudflare, registration lookups to Verisign's public RDAP
+        service, and word suggestions from Datamuse. Those go straight from your device to those
+        services, not through us.
+      </p>
+      <p>
+        Your word lists, favorites, and results are saved only in this browser's local storage,
+        on your own machine. Clear your browser data and they're gone. Exporting just hands you a
+        file you control.
+      </p>
+      <h4>Terms, kept human</h4>
+      <p>
+        Availability results come from free public services and are best-effort, not a promise:
+        a name showing as open isn't guaranteed to be registrable (premium and reserved names
+        happen). Always confirm with a registrar before you count on it.
+      </p>
+      <p>
+        SlugSeek is provided as-is, with no warranties, and you use it at your own risk. That's
+        honestly the whole deal. Happy hunting. 🐌
+      </p>
+    </div>
+  </div>
+</div>
+<div class="scorepanel" id="scorePanel"></div>
+<input type="file" id="importFile" accept="application/json,.json" style="display:none" />
+
+<script type="module">
+import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./engine.js";
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const el = {
+    cmd: $("cmd"),
+    gtag: $("gtag"),
+    input: $("wordInput"),
+    add: $("addBtn"),
+    wordChips: $("wordChips"),
+    wordCount: $("wordCount"),
+    clearWords: $("clearWords"),
+    groupBtn: $("groupBtn"),
+    run: $("runBtn"),
+    reversed: $("reversed"),
+    bothOrdersChk: $("bothOrdersChk"),
+    est: $("est"),
+    readout: $("readout"),
+    bar: $("bar"),
+    pct: $("pct"),
+    seg: $("seg"),
+    notice: $("notice"),
+    netBanner: $("netBanner"),
+    resPanel: $("resPanel"),
+    flags: $("flags"),
+    resEmpty: $("resEmpty"),
+    rows: $("rows"),
+    verifyAll: $("verifyAll"),
+    topZone: $("topZone"),
+    sheetHandle: $("sheetHandle"),
+    cOpen: $("cOpen"),
+    cAll: $("cAll"),
+    cTaken: $("cTaken"),
+    cUnknown: $("cUnknown"),
+    cFav: $("cFav"),
+    favFilter: $("favFilter"),
+    aboutBtn: $("aboutBtn"),
+    aboutModal: $("aboutModal"),
+    aboutClose: $("aboutClose"),
+    sortbar: document.querySelector(".sortbar"),
+    flagUnknown: document.querySelector('.flag[data-f="unknown"]'),
+    exportBtn: $("exportBtn"),
+    importBtn: $("importBtn"),
+    importFile: $("importFile"),
+    pop: $("pop"),
+    popTitle: $("popTitle"),
+    popClose: $("popClose"),
+    popRemove: $("popRemove"),
+    popChips: $("popChips"),
+    scorePanel: $("scorePanel"),
+    toast: $("toast"),
+    undoBtn: $("undoBtn"),
+  };
+
+  // ----- registrar (swap if one doesn't prefill; godaddy is the most reliable prefill) -----
+  const REGISTRAR = "squarespace";
+  const REGISTRARS = {
+    squarespace: (d) => `https://domains.squarespace.com/domain-search?query=${d}`,
+    godaddy: (d) => `https://www.godaddy.com/domainsearch/find?domainToCheck=${d}`,
+    namecheap: (d) => `https://www.namecheap.com/domains/registration/results/?domain=${d}`,
+    porkbun: (d) => `https://porkbun.com/checkout/search?q=${d}`,
+  };
+  const BUY_URL = (d) => (REGISTRARS[REGISTRAR] || REGISTRARS.squarespace)(d);
+
+  const SAMPLE_GROUPS = [
+    [
+      "get",
+      "try",
+      "io",
+      "ai",
+      "hq",
+      "pro",
+      "sync",
+      "flow",
+      "core",
+      "base",
+      "kit",
+      "stack",
+      "hub",
+      "labs",
+      "works",
+      "studio",
+      "forge",
+      "foundry",
+      "collective",
+      "group",
+    ],
+    ["code", "dev", "build", "ship", "craft", "logic", "byte", "script", "node", "data"],
+  ];
+
+  const MAX_COMBOS = 10000; // hard cap (protects the DOM + your patience, not the network)
+  const DOH_CONC = 12,
+    RDAP_CONC = 3,
+    BAR_CELLS = 18,
+    AUTO_T2_MAX = 100;
+  const DISPLAY_CAP = 600,
+    SHOW_MORE_CHUNK = 600; // DOM rows rendered per window
+  const CONFIRM_CHUNK = 25; // rows per visible confirm batch
+  const RENDER_THROTTLE = 450,
+    RECOUNT_EVERY = 25;
+  const DM_PER_QUERY = 14,
+    SUG_MAX = 30,
+    DRAG_THRESH = 7,
+    UNDO_MAX = 20;
+  const DM_RELS = [
+    { p: "rel_syn", w: 1.2 },
+    { p: "ml", w: 1.0 },
+    { p: "rel_trg", w: 0.9 },
+  ];
+  const STOP = new Set(
+    "the and for with you our are was its from this that has had who what when where how why not all any can com www net org http https into out off over under more most very just only also than then them they their there here".split(
+      " ",
+    ),
+  );
+  const PRIO = { go: 0, clear: 1, pending: 2, unknown: 3, taken: 4 };
+  const TAG = {
+    pending: "[ \u00b7\u00b7\u00b7\u00b7 ]",
+    clear: "[ OPEN ]",
+    go: "[ OPEN \u2713 ]",
+    taken: "[ TAKEN ]",
+    unknown: "[  ??  ]",
+  };
+  const GLY = { pending: "\u203a", clear: "\u2713", go: "\u2713", taken: "\u2717", unknown: "?" };
+  const LS_KEY = "slugseek:v1",
+    CACHE_STORE_MAX = 30000,
+    SAVE_DEBOUNCE = 900;
+
+  let groups = [[]],
+    activeGroup = 0,
+    undoStack = [];
+  let resultCache = new Map();
+  const wordSugCache = new Map();
+  let rows = [],
+    activeFilter = "open",
+    displayLimit = DISPLAY_CAP;
+  let sortMode = "score",
+    favOnly = false,
+    batchSeq = 0,
+    seqCounter = 0;
+  let lastSweepSig = null; // signature of word-set + bothOrders as of last sweep
+  let favorites = new Set();
+  let netFail = 0,
+    netDone = 0,
+    popOpen = false,
+    popWord = null,
+    toastT;
+  let sweeping = false,
+    aborted = false,
+    storageOk = true;
+  // adaptive RDAP/DoH pacing: the engine owns the backoff delay, the UI shows
+  // the notice; onNet feeds the engine's network results into the UI counters.
+  const pacer = makePacer({
+    onHit: () =>
+      setNotice("rl", "registry rate limit hit: pacing requests; larger confirms will take longer."),
+    onOk: () => setNotice("rl", null),
+  });
+  const onNet = (failed) => {
+    netDone++;
+    if (failed) netFail++;
+  };
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const isMobile = () => window.matchMedia("(max-width: 560px)").matches;
+  const isGrouped = () => groups.length > 1;
+  // A single list is always tried in both orders; two groups honor the --both-orders
+  // checkbox; three groups are a fixed prefix → root → suffix pattern (order fixed).
+  const effectiveBoth = () => {
+    if (!isGrouped()) return true;
+    if (groups.length === 2) return el.reversed.checked;
+    return false;
+  };
+  // role hints for grouped mode (2 groups = modifier × root, 3 = prefix × root × suffix)
+  const ROLE_NAMES = { 2: ["modifier", "root"], 3: ["prefix", "root", "suffix"] };
+  const roleName = (gi) => (ROLE_NAMES[groups.length] || [])[gi] || "";
+  const allWords = () => groups.flat();
+  const hasWord = (w) => allWords().includes(w);
+  const groupOf = (w) => groups.findIndex((g) => g.includes(w));
+
+  function parseWords(raw) {
+    const seen = new Set(),
+      out = [];
+    String(raw)
+      .split(/[\s,]+/)
+      .forEach((w) => {
+        const c = w.toLowerCase().replace(/[^a-z0-9-]/g, "");
+        if (c && !seen.has(c)) {
+          seen.add(c);
+          out.push(c);
+        }
+      });
+    return out;
+  }
+
+  // ===== persistence (localStorage) =====
+  let saveT;
+  function saveDebounced() {
+    clearTimeout(saveT);
+    saveT = setTimeout(saveState, SAVE_DEBOUNCE);
+  }
+  function saveState() {
+    if (!storageOk) return;
+    try {
+      let entries = [...resultCache.entries()];
+      if (entries.length > CACHE_STORE_MAX) entries = entries.slice(-CACHE_STORE_MAX); // keep most-recent
+      const cache = {};
+      entries.forEach(([k, v]) => (cache[k] = v));
+      const payload = JSON.stringify({
+        v: 1,
+        groups,
+        bothOrders: el.reversed.checked,
+        cache,
+        favorites: [...favorites],
+        sortMode,
+      });
+      try {
+        localStorage.setItem(LS_KEY, payload);
+      } catch (e) {
+        // quota: shed half the cache and retry once
+        const half = entries.slice(-Math.floor(CACHE_STORE_MAX / 3));
+        const c2 = {};
+        half.forEach(([k, v]) => (c2[k] = v));
+        localStorage.setItem(
+          LS_KEY,
+          JSON.stringify({
+            v: 1,
+            groups,
+            bothOrders: el.reversed.checked,
+            cache: c2,
+            favorites: [...favorites],
+            sortMode,
+          }),
+        );
+      }
+    } catch (e) {
+      storageOk = false;
+      setNotice(
+        "storage",
+        "Local cache unavailable (private mode?); results won't persist between sessions.",
+      );
+    }
+  }
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      if (Array.isArray(d.groups) && d.groups.length)
+        groups = d.groups.map((g) =>
+          Array.isArray(g) ? g.map((w) => String(w).toLowerCase()).filter(Boolean) : [],
+        );
+      if (!groups.length) groups = [[]];
+      activeGroup = Math.min(activeGroup, groups.length - 1);
+      if (typeof d.bothOrders === "boolean") el.reversed.checked = d.bothOrders;
+      if (d.cache)
+        Object.entries(d.cache).forEach(([k, v]) => {
+          if (v && typeof v === "object") resultCache.set(k, v);
+        });
+      if (Array.isArray(d.favorites)) favorites = new Set(d.favorites.map(String));
+      if (d.sortMode === "default" || d.sortMode === "score" || d.sortMode === "az")
+        sortMode = d.sortMode;
+      else if (d.sortMode === "grouped" || d.sortMode === "batch") sortMode = "score"; // grouped sort removed
+    } catch (e) {
+      storageOk = false;
+    }
+  }
+
+  // ===== notices =====
+  const notices = new Map();
+  function setNotice(key, msg) {
+    if (msg) notices.set(key, msg);
+    else notices.delete(key);
+    if (!notices.size) {
+      el.notice.classList.remove("show");
+      el.notice.innerHTML = "";
+      return;
+    }
+    el.notice.innerHTML = [...notices.values()].map((m) => `<div># ${m}</div>`).join("");
+    el.notice.classList.add("show");
+  }
+
+  // ===== undo =====
+  function snapshot() {
+    undoStack.push(JSON.stringify(groups));
+    if (undoStack.length > UNDO_MAX) undoStack.shift();
+    el.undoBtn.disabled = false;
+  }
+  function undo() {
+    if (!undoStack.length) return;
+    groups = JSON.parse(undoStack.pop());
+    if (!groups.length) groups = [[]];
+    activeGroup = Math.min(activeGroup, groups.length - 1);
+    el.undoBtn.disabled = !undoStack.length;
+    afterWords();
+    reflectGrouped();
+  }
+
+  // ===== word mutations =====
+  function addMany(str, gi) {
+    const incoming = parseWords(str).filter((w) => !hasWord(w));
+    if (!incoming.length) return;
+    snapshot();
+    const t = gi == null ? activeGroup : gi;
+    incoming.forEach((w) => groups[t].push(w));
+    afterWords();
+  }
+  function removeWord(w) {
+    const gi = groupOf(w);
+    if (gi < 0) return;
+    snapshot();
+    groups[gi] = groups[gi].filter((x) => x !== w);
+    afterWords();
+  }
+  function clearAll() {
+    if (!allWords().length) return;
+    snapshot();
+    groups = [[]];
+    activeGroup = 0;
+    afterWords();
+    reflectGrouped();
+  }
+  function loadSample() {
+    snapshot();
+    groups = SAMPLE_GROUPS.map((g) => g.slice());
+    activeGroup = groups.length - 1;
+    afterWords();
+    reflectGrouped();
+  }
+  function afterWords() {
+    renderWords();
+    updateEstimate();
+    syncPopChips();
+    refreshRunButton();
+    saveDebounced();
+  }
+
+  function enterGroups() {
+    if (isGrouped()) return;
+    snapshot();
+    groups = [groups[0], []];
+    activeGroup = 1;
+    flip(renderWords);
+    updateEstimate();
+    reflectGrouped();
+    saveDebounced();
+  }
+  function exitGroups() {
+    if (!isGrouped()) return;
+    snapshot();
+    const m = [];
+    allWords().forEach((w) => {
+      if (!m.includes(w)) m.push(w);
+    });
+    groups = [m];
+    activeGroup = 0;
+    flip(renderWords);
+    updateEstimate();
+    reflectGrouped();
+    saveDebounced();
+  }
+  function toggleGroups() {
+    isGrouped() ? exitGroups() : enterGroups();
+  }
+  function addGroup() {
+    if (groups.length >= 3) return; // 3 groups max (prefix × root × suffix)
+    snapshot();
+    groups.push([]);
+    activeGroup = groups.length - 1;
+    flip(renderWords);
+    updateEstimate();
+    reflectGrouped();
+    saveDebounced();
+  }
+  function delGroup(gi) {
+    snapshot();
+    const words = groups[gi];
+    groups.splice(gi, 1);
+    if (!groups.length) groups = [[]];
+    else {
+      const into = Math.max(0, gi - 1);
+      words.forEach((w) => {
+        if (!groups[into].includes(w)) groups[into].push(w);
+      });
+    }
+    activeGroup = Math.min(activeGroup, groups.length - 1);
+    flip(renderWords);
+    updateEstimate();
+    reflectGrouped();
+    saveDebounced();
+  }
+  function setActive(gi) {
+    activeGroup = gi;
+    renderWords();
+    reflectGrouped();
+  }
+  // place the group currently at index `from` directly above/below the group currently at index `targetIdx`
+  function moveGroupRelative(from, targetIdx, pos) {
+    if (
+      from === targetIdx ||
+      from < 0 ||
+      targetIdx < 0 ||
+      from >= groups.length ||
+      targetIdx >= groups.length
+    )
+      return;
+    snapshot();
+    const activeWords = groups[activeGroup];
+    const moving = groups[from];
+    const target = groups[targetIdx];
+    const without = groups.filter((_, i) => i !== from);
+    let ti = without.indexOf(target);
+    if (pos === "below") ti += 1;
+    without.splice(ti, 0, moving);
+    groups = without;
+    activeGroup = groups.indexOf(activeWords);
+    if (activeGroup < 0) activeGroup = 0;
+    flip(renderWords);
+    updateEstimate();
+    reflectGrouped();
+    refreshRunButton();
+    saveDebounced();
+  }
+  function moveWordBefore(w, gj, refWord) {
+    const from = groupOf(w);
+    if (from < 0) return;
+    if (from === gj && w === refWord) return;
+    snapshot();
+    flip(() => {
+      groups[from] = groups[from].filter((x) => x !== w);
+      let idx = refWord ? groups[gj].indexOf(refWord) : -1;
+      if (idx < 0) groups[gj].push(w);
+      else groups[gj].splice(idx, 0, w);
+      renderWords();
+    });
+    updateEstimate();
+    reflectGrouped();
+    saveDebounced();
+  }
+
+  function reflectGrouped() {
+    el.cmd.classList.toggle("grouped", isGrouped());
+    el.groupBtn.setAttribute("aria-pressed", String(isGrouped()));
+    if (isGrouped()) el.gtag.textContent = "g" + (activeGroup + 1);
+    // --both-orders only means something with exactly two groups; a single list is
+    // always both orders, and three groups are a fixed prefix → root → suffix pattern.
+    el.bothOrdersChk.style.display = groups.length === 2 ? "" : "none";
+  }
+
+  function flip(mutate) {
+    const before = new Map();
+    el.wordChips
+      .querySelectorAll(".chip.word")
+      .forEach((c) => before.set(c.dataset.w, c.getBoundingClientRect()));
+    mutate();
+    el.wordChips.querySelectorAll(".chip.word").forEach((c) => {
+      const b = before.get(c.dataset.w);
+      if (!b) return;
+      const a = c.getBoundingClientRect(),
+        dx = b.left - a.left,
+        dy = b.top - a.top;
+      if (dx || dy) {
+        c.style.transform = `translate(${dx}px,${dy}px)`;
+        c.style.transition = "none";
+        requestAnimationFrame(() => {
+          c.style.transition = "transform .3s cubic-bezier(.2,.8,.2,1)";
+          c.style.transform = "";
+        });
+      }
+    });
+  }
+
+  // ===== render words =====
+  function makeWordChip(w) {
+    const chip = document.createElement("div");
+    chip.className = "chip word";
+    chip.dataset.w = w;
+    chip.textContent = w;
+    chip.addEventListener("pointerdown", (e) => startDrag(e, w, chip));
+    return chip;
+  }
+  function renderWords() {
+    el.wordCount.textContent = `(${allWords().length})`;
+    el.clearWords.disabled = allWords().length === 0;
+    el.wordChips.classList.toggle("grouped", isGrouped());
+    el.wordChips.innerHTML = "";
+    if (!isGrouped()) {
+      const ws = groups[0];
+      if (!ws.length) {
+        const e = document.createElement("span");
+        e.className = "empty-mini";
+        e.innerHTML = `# empty: add words, or <a id="sampleLink">load a sample set</a>`;
+        el.wordChips.appendChild(e);
+        $("sampleLink").onclick = loadSample;
+        return;
+      }
+      ws.forEach((w) => el.wordChips.appendChild(makeWordChip(w)));
+      return;
+    }
+    groups.forEach((ws, gi) => {
+      const lane = document.createElement("div");
+      lane.className = "lane" + (gi === activeGroup ? " active" : "");
+      lane.dataset.gi = gi;
+      lane.onclick = (e) => {
+        if (e.target.closest(".chip") || e.target.closest(".lane-del")) return;
+        setActive(gi);
+      };
+      const head = document.createElement("div");
+      head.className = "lane-head";
+      head.title = "drag to reorder";
+      head.innerHTML = `<span class="lane-grip">\u2630</span><span class="lane-bar"></span><span class="lane-n">${gi + 1}</span>`;
+      head.addEventListener("pointerdown", (e) => startLaneDrag(e, gi, lane));
+      const chips = document.createElement("div");
+      chips.className = "lane-chips";
+      if (!ws.length) {
+        const e = document.createElement("span");
+        e.className = "empty-mini";
+        const role = roleName(gi);
+        const hint = gi === activeGroup ? "type to add here" : "drag words here";
+        e.textContent = role ? `${role}: ${hint}` : hint;
+        chips.appendChild(e);
+      } else ws.forEach((w) => chips.appendChild(makeWordChip(w)));
+      const del = document.createElement("button");
+      del.className = "lane-del";
+      del.textContent = "\u00d7";
+      del.title = "remove group";
+      del.onclick = (e) => {
+        e.stopPropagation();
+        delGroup(gi);
+      };
+      lane.appendChild(head);
+      lane.appendChild(chips);
+      lane.appendChild(del);
+      el.wordChips.appendChild(lane);
+    });
+    const addBtn = document.createElement("button");
+    addBtn.className = "lane-add";
+    const atMax = groups.length >= 3;
+    addBtn.textContent = atMax ? "max 3 groups" : "+ add group";
+    addBtn.disabled = atMax;
+    addBtn.onclick = addGroup;
+    el.wordChips.appendChild(addBtn);
+  }
+  function updateEstimate() {
+    const n = pairCount(effectiveBoth());
+    if (n > 0) {
+      const noun = groups.length === 3 ? "combo" : "pair";
+      const pattern =
+        groups.length === 3
+          ? " \u00b7 prefix \u00d7 root \u00d7 suffix"
+          : groups.length === 2
+            ? " \u00b7 modifier \u00d7 root"
+            : "";
+      el.est.textContent = `# ${n.toLocaleString()} ${noun}${n !== 1 ? "s" : ""}${pattern}`;
+    } else {
+      el.est.textContent = isGrouped() ? "# fill the groups" : "# add 2+ words";
+    }
+  }
+  function pairCount(both) {
+    if (!isGrouped()) {
+      // single list: every ordered pair (always both orders)
+      const n = groups[0].length;
+      return n * (n - 1);
+    }
+    if (groups.length === 2) {
+      const c = groups[0].length * groups[1].length;
+      return both ? c * 2 : c;
+    }
+    // three groups: prefix \u00d7 root \u00d7 suffix
+    return groups[0].length * groups[1].length * groups[2].length;
+  }
+
+  // ===== pip drag / tap menu =====
+  let ghost = null,
+    lastDrop = null;
+  function startDrag(e, w, chip) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const sx = e.clientX,
+      sy = e.clientY;
+    let moved = false;
+    const onMove = (ev) => {
+      if (!moved) {
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) > DRAG_THRESH) {
+          moved = true;
+          ghost = chip.cloneNode(true);
+          ghost.classList.add("drag-ghost");
+          document.body.appendChild(ghost);
+          chip.classList.add("dragging");
+        } else return;
+      }
+      ev.preventDefault();
+      ghost.style.left = ev.clientX + "px";
+      ghost.style.top = ev.clientY + "px";
+      if (isGrouped()) {
+        const elx = document.elementFromPoint(ev.clientX, ev.clientY);
+        const lane = elx && elx.closest(".lane");
+        if (lastDrop && lastDrop !== lane) lastDrop.classList.remove("drop");
+        if (lane) {
+          lane.classList.add("drop");
+          lastDrop = lane;
+        }
+      }
+    };
+    const onUp = (ev) => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      if (moved) {
+        const elx = document.elementFromPoint(ev.clientX, ev.clientY);
+        const overChip = elx && elx.closest(".chip.word");
+        let gj,
+          refWord = null;
+        if (overChip) {
+          const lane = overChip.closest(".lane");
+          gj = lane ? parseInt(lane.dataset.gi, 10) : 0;
+          const r = overChip.getBoundingClientRect();
+          if (ev.clientX < r.left + r.width / 2) refWord = overChip.dataset.w;
+          else {
+            const nx = overChip.nextElementSibling;
+            refWord = nx && nx.classList.contains("word") ? nx.dataset.w : null;
+          }
+        } else {
+          const lane = elx && elx.closest(".lane");
+          gj = lane ? parseInt(lane.dataset.gi, 10) : groupOf(w);
+        }
+        if (ghost) {
+          ghost.remove();
+          ghost = null;
+        }
+        if (lastDrop) {
+          lastDrop.classList.remove("drop");
+          lastDrop = null;
+        }
+        chip.classList.remove("dragging");
+        if (gj == null || gj < 0 || gj >= groups.length) gj = groupOf(w);
+        moveWordBefore(w, gj, refWord);
+      } else openWordMenu(w, chip);
+    };
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  }
+  el.groupBtn.onclick = toggleGroups;
+
+  // ===== lane (group) reorder: drag the lane-head handle =====
+  let laneGhost = null,
+    laneDropTarget = null,
+    laneDropPos = null;
+  function clearLaneDrop() {
+    el.wordChips
+      .querySelectorAll(".lane.lane-drop-above,.lane.lane-drop-below")
+      .forEach((l) => l.classList.remove("lane-drop-above", "lane-drop-below"));
+    laneDropTarget = null;
+    laneDropPos = null;
+  }
+  function startLaneDrag(e, gi, lane) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const sx = e.clientX,
+      sy = e.clientY;
+    let moved = false;
+    const onMove = (ev) => {
+      if (!moved) {
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) <= DRAG_THRESH) return;
+        moved = true;
+        laneGhost = lane.cloneNode(true);
+        laneGhost.classList.add("lane-ghost");
+        laneGhost.style.width = lane.offsetWidth + "px";
+        document.body.appendChild(laneGhost);
+        lane.classList.add("lane-dragging");
+      }
+      ev.preventDefault();
+      laneGhost.style.left = ev.clientX + "px";
+      laneGhost.style.top = ev.clientY + "px";
+      const elx = document.elementFromPoint(ev.clientX, ev.clientY);
+      const over = elx && elx.closest(".lane");
+      clearLaneDrop();
+      if (over && over !== lane) {
+        const r = over.getBoundingClientRect();
+        const below = ev.clientY > r.top + r.height / 2;
+        over.classList.add(below ? "lane-drop-below" : "lane-drop-above");
+        laneDropTarget = parseInt(over.dataset.gi, 10);
+        laneDropPos = below ? "below" : "above";
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      if (laneGhost) {
+        laneGhost.remove();
+        laneGhost = null;
+      }
+      lane.classList.remove("lane-dragging");
+      if (moved && laneDropTarget != null) {
+        clearLaneDrop();
+        moveGroupRelative(gi, laneDropTarget, laneDropPos);
+      } else {
+        clearLaneDrop();
+        if (!moved) setActive(gi);
+      }
+    };
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  }
+
+  // ===== datamuse popover =====
+  async function dmQuery(param, seed) {
+    const r = await fetch(
+      `https://api.datamuse.com/words?${param}=${encodeURIComponent(seed)}&max=${DM_PER_QUERY}&md=pf`,
+    );
+    if (!r.ok) return [];
+    return (await r.json()).map((o) => {
+      let f = 0;
+      const pos = [];
+      (o.tags || []).forEach((t) =>
+        t.startsWith("f:") ? (f = parseFloat(t.slice(2)) || 0) : pos.push(t),
+      );
+      return { word: (o.word || "").toLowerCase(), freq: f, pos };
+    });
+  }
+  async function fetchWordSuggestions(word) {
+    if (wordSugCache.has(word)) return wordSugCache.get(word);
+    const merged = new Map();
+    let fail = 0;
+    await pool(DM_RELS, 3, async (rel) => {
+      let res = [];
+      try {
+        res = await dmQuery(rel.p, word);
+      } catch (e) {
+        fail++;
+        return;
+      }
+      res.forEach((it) => {
+        const w = it.word;
+        if (!/^[a-z]+$/.test(w) || w.length < 3 || w.length > 12 || STOP.has(w) || w === word)
+          return;
+        const good = it.pos.some((p) => p === "n" || p === "adj" || p === "v");
+        const cur = merged.get(w) || { weight: 0, freq: 0 };
+        cur.weight += rel.w + (good ? 0.15 : 0);
+        cur.freq = Math.max(cur.freq, it.freq);
+        merged.set(w, cur);
+      });
+    });
+    if (fail >= DM_RELS.length) return null;
+    const ranked = [...merged.entries()]
+      .sort((a, b) => b[1].weight - a[1].weight || b[1].freq - a[1].freq)
+      .map((e) => e[0])
+      .slice(0, SUG_MAX);
+    wordSugCache.set(word, ranked);
+    return ranked;
+  }
+  let popRect = null;
+  function placePop() {
+    if (!popRect) return;
+    const r = popRect,
+      p = el.pop;
+    p.style.left = "0px";
+    p.style.top = r.bottom + 6 + "px";
+    const pr = p.getBoundingClientRect();
+    let left = r.left;
+    if (left + pr.width > innerWidth - 8) left = innerWidth - 8 - pr.width;
+    if (left < 8) left = 8;
+    p.style.left = left + "px";
+    if (r.bottom + 6 + pr.height > innerHeight - 8)
+      p.style.top = Math.max(8, r.top - pr.height - 6) + "px";
+  }
+  async function openWordMenu(word, anchor) {
+    popOpen = true;
+    popWord = word;
+    popRect = anchor.getBoundingClientRect();
+    el.pop.classList.add("show");
+    el.popTitle.textContent = `"${word}"`;
+    el.popChips.innerHTML = `<span class="empty-mini">\u2026</span>`;
+    placePop();
+    const list = await fetchWordSuggestions(word);
+    if (!popOpen || popWord !== word) return;
+    if (list === null) {
+      el.popChips.innerHTML = `<span class="empty-mini">couldn't reach word service; host the file</span>`;
+      placePop();
+      return;
+    }
+    if (!list.length) {
+      el.popChips.innerHTML = `<span class="empty-mini">no related words found</span>`;
+      placePop();
+      return;
+    }
+    el.popChips.innerHTML = "";
+    list.forEach((w) => {
+      const added = hasWord(w);
+      const c = document.createElement("button");
+      c.className = "chip sug" + (added ? " added" : "");
+      c.dataset.w = w;
+      c.innerHTML = `<span class="mk">${added ? "\u2713" : "+"}</span>${w}`;
+      c.onclick = (e) => {
+        e.stopPropagation();
+        if (hasWord(w)) {
+          removeWord(w);
+        } else {
+          const gi = groupOf(word);
+          addMany(w, gi < 0 ? activeGroup : gi);
+          c.classList.add("justadded");
+          setTimeout(() => c.classList.remove("justadded"), 420);
+        }
+      };
+      el.popChips.appendChild(c);
+    });
+    placePop();
+  }
+  function syncPopChips() {
+    if (!popOpen) return;
+    el.popChips.querySelectorAll(".chip.sug").forEach((c) => {
+      const a = hasWord(c.dataset.w);
+      c.classList.toggle("added", a);
+      const mk = c.querySelector(".mk");
+      if (mk) mk.textContent = a ? "\u2713" : "+";
+    });
+  }
+  function closePop() {
+    popOpen = false;
+    popWord = null;
+    el.pop.classList.remove("show");
+  }
+  el.popClose.onclick = closePop;
+  el.popRemove.onclick = () => {
+    if (popWord) removeWord(popWord);
+    closePop();
+  };
+  document.addEventListener("click", (e) => {
+    if (!popOpen) return;
+    if (e.target.closest("#pop")) return;
+    if (e.target.closest(".chip.word")) return;
+    if (ghost) return;
+    closePop();
+  });
+
+  // ===== brandability scoring (§9): pure, no deps, no network =====
+  // attach/lazy-compute a score onto a row object (open rows only need it)
+  function scoreOf(d) {
+    if (d._score) return d._score;
+    const m = d.domain.match(/^(.*)\.com$/);
+    const label = m ? m[1] : d.domain;
+    d._score = scoreDomain(label, d.parts);
+    return d._score;
+  }
+
+  // ===== network: dohNS/rdapCheck/pool now imported from engine.js =====
+
+  // ===== results: data-first, windowed DOM =====
+  function stateOf(d) {
+    if (d.rdap && (d.rdap.state === "open" || d.rdap.state === "registered"))
+      return d.rdap.state === "open" ? "go" : "taken";
+    return d.dns || "pending";
+  }
+  function bucketOf(d) {
+    const s = stateOf(d);
+    return s === "clear" || s === "go"
+      ? "open"
+      : s === "taken"
+        ? "taken"
+        : s === "unknown"
+          ? "unknown"
+          : "pending";
+  }
+  function cacheSet(d) {
+    resultCache.set(d.domain, {
+      dns: d.dns,
+      rdap:
+        d.rdap && (d.rdap.state === "open" || d.rdap.state === "registered") ? d.rdap : undefined,
+    });
+  }
+
+  // ===== detailed score panel (dev view) =====
+  let scorePanelFor = null;
+  function hideScorePanel() {
+    scorePanelFor = null;
+    el.scorePanel.classList.remove("show");
+  }
+  function showScorePanel(badge, sc, domain) {
+    scorePanelFor = badge;
+    const tierWord = sc.score >= 80 ? "strong" : sc.score >= 65 ? "decent" : "weak";
+    const rows = sc.breakdown
+      .map((b) => {
+        const sign = b.delta > 0 ? "+" : b.delta < 0 ? "" : "";
+        const cls = "sp-" + b.kind;
+        return `<div class="sp-row ${cls}"><span class="sp-d">${b.delta > 0 ? "+" : ""}${b.delta}</span><span class="sp-l">${b.label}</span></div>`;
+      })
+      .join("");
+    const metrics =
+      `<div class="sp-metrics">` +
+      `<span>${sc.len} chars</span><span>${sc.syl} syll</span><span>vowels ${sc.vowelRatio}%</span>` +
+      `<span>max run ${sc.maxRun || 1}</span>${sc.seam ? `<span>seam ${sc.seam}</span>` : ""}` +
+      `</div>`;
+    const flagline = sc.flags.length
+      ? `<div class="sp-flags">\u26a0 ${sc.flags.join(", ")}</div>`
+      : "";
+    el.scorePanel.innerHTML =
+      `<div class="sp-head"><span class="sp-dom">${domain}</span><span class="sp-score ${sc.score >= 80 ? "hi" : sc.score >= 65 ? "mid" : "lo"}">${sc.score}<span class="sp-of">/100 \u00b7 ${tierWord}</span></span></div>` +
+      metrics +
+      `<div class="sp-list">${rows}</div>` +
+      (sc.raw !== sc.score
+        ? `<div class="sp-raw">raw ${sc.raw} \u2192 clamped ${sc.score}</div>`
+        : "") +
+      flagline;
+    el.scorePanel.classList.add("show");
+    // position above/below the badge
+    const r = badge.getBoundingClientRect();
+    const p = el.scorePanel;
+    p.style.left = "0px";
+    p.style.top = "0px";
+    const pr = p.getBoundingClientRect();
+    let left = Math.min(r.left, innerWidth - 8 - pr.width);
+    left = Math.max(8, left);
+    let top = r.bottom + 6;
+    if (top + pr.height > innerHeight - 8) top = Math.max(8, r.top - pr.height - 6);
+    p.style.left = left + "px";
+    p.style.top = top + "px";
+  }
+
+  function buildRowNode(d) {
+    const s = stateOf(d);
+    const node = document.createElement("div");
+    node.className = "row" + (s === "taken" ? " taken" : "");
+    const m = d.domain.match(/^(.*)(\.com)$/);
+    node.innerHTML = `<span class="g ${s}">${GLY[s]}</span><span class="dom">${m ? m[1] : d.domain}<span class="tld">${m ? m[2] : ""}</span></span><span class="tag ${s}">${d.verifying ? "[ rdap\u2026 ]" : TAG[s] || TAG.pending}</span><span class="racts"></span>`;
+    const act = node.querySelector(".racts");
+    const star = document.createElement("button");
+    star.className = "star" + (favorites.has(d.domain) ? " on" : "");
+    star.textContent = favorites.has(d.domain) ? "\u2605" : "\u2606";
+    star.title = "favorite";
+    star.onclick = (e) => {
+      e.stopPropagation();
+      toggleFav(d.domain);
+      const on = favorites.has(d.domain);
+      star.classList.toggle("on", on);
+      star.textContent = on ? "\u2605" : "\u2606";
+    };
+    act.appendChild(star);
+    if (s === "clear" || s === "go") {
+      const sc = scoreOf(d);
+      const tier = sc.score >= 80 ? "hi" : sc.score >= 65 ? "mid" : "lo";
+      const badge = document.createElement("span");
+      badge.className = "score " + tier;
+      badge.tabIndex = 0;
+      const warn = sc.flags.length ? "\u26a0" : "";
+      badge.innerHTML = `${sc.score}${warn ? `<span class="warn">${warn}</span>` : ""}`;
+      // Hover shows the breakdown; moving the mouse off the badge hides it
+      // (no delay). Click and focus also work, for touch and keyboard.
+      const show = () => showScorePanel(badge, sc, d.domain);
+      badge.addEventListener("mouseenter", show);
+      badge.addEventListener("mouseleave", hideScorePanel);
+      badge.addEventListener("focus", show);
+      badge.addEventListener("blur", hideScorePanel);
+      badge.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (scorePanelFor === badge) hideScorePanel();
+        else show();
+      });
+      act.appendChild(badge);
+    }
+    if (s === "clear" || s === "unknown") {
+      const b = document.createElement("button");
+      b.className = "rb confirm";
+      b.textContent = "confirm";
+      b.onclick = () => verify(d, false);
+      act.appendChild(b);
+    } else if (s === "go") {
+      const a = document.createElement("a");
+      a.className = "rb buy";
+      a.textContent = "register \u2197";
+      a.href = BUY_URL(d.domain);
+      a.target = "_blank";
+      a.rel = "noopener";
+      act.appendChild(a);
+    }
+    const cp = document.createElement("button");
+    cp.className = "ricn";
+    cp.textContent = "copy";
+    cp.title = "copy";
+    cp.onclick = () => {
+      navigator.clipboard?.writeText(d.domain);
+      cp.textContent = "ok";
+      setTimeout(() => (cp.textContent = "copy"), 900);
+    };
+    act.appendChild(cp);
+    if (s === "taken" && d.rdap && d.rdap.info) {
+      const det = document.createElement("div");
+      det.className = "detail";
+      const i = d.rdap.info;
+      det.innerHTML = `<span class="k">registrar</span><span class="v">${i.registrar}</span><span class="k">created</span><span class="v">${i.created}</span><span class="k">expires</span><span class="v">${i.expires}</span><span class="k">status</span><span class="v">${i.status}</span>`;
+      node.appendChild(det);
+    }
+    return node;
+  }
+  const matchesFilter = (d) => {
+    if (favOnly && !favorites.has(d.domain)) return false;
+    const b = bucketOf(d);
+    return activeFilter === "all" || activeFilter === b;
+  };
+  const cmpScore = (a, b) => {
+    const pa = PRIO[stateOf(a)],
+      pb = PRIO[stateOf(b)];
+    if (pa !== pb) return pa - pb;
+    if (pa <= 1) {
+      const sa = scoreOf(a).score,
+        sb = scoreOf(b).score;
+      if (sa !== sb) return sb - sa;
+    }
+    return a.domain.localeCompare(b.domain);
+  };
+  const cmpAz = (a, b) => a.domain.localeCompare(b.domain);
+  const cmpSeq = (a, b) => a.seq - b.seq; // pure insertion (search) order
+  function makeMoreBtn(subset) {
+    const more = document.createElement("button");
+    more.className = "show-more";
+    const remaining = subset.length - displayLimit;
+    more.textContent = `show ${Math.min(SHOW_MORE_CHUNK, remaining).toLocaleString()} more  (${displayLimit.toLocaleString()}/${subset.length.toLocaleString()})`;
+    more.onclick = () => {
+      more.remove();
+      displayLimit += SHOW_MORE_CHUNK;
+      renderResults();
+    };
+    return more;
+  }
+
+  function renderResults() {
+    let subset = rows.filter(matchesFilter);
+    const frag = document.createDocumentFragment();
+
+    // score = best-first (default), az = alphabetical, default = original search order
+    const cmp = sortMode === "score" ? cmpScore : sortMode === "az" ? cmpAz : cmpSeq;
+    subset.sort(cmp);
+    subset.slice(0, displayLimit).forEach((d) => frag.appendChild(buildRowNode(d)));
+    el.rows.innerHTML = "";
+    el.rows.appendChild(frag);
+    if (subset.length > displayLimit) el.rows.appendChild(makeMoreBtn(subset));
+    el.resEmpty.textContent =
+      subset.length === 0
+        ? rows.length
+          ? favOnly
+            ? "# no favorites match this filter"
+            : activeFilter === "open"
+              ? "# no open .coms: try --all, or add more words"
+              : "# nothing matches this filter"
+          : ""
+        : "";
+  }
+  let renderPending = false,
+    lastRender = 0;
+  function scheduleRender() {
+    const now = performance.now();
+    if (now - lastRender > RENDER_THROTTLE) {
+      lastRender = now;
+      renderResults();
+    } else if (!renderPending) {
+      renderPending = true;
+      setTimeout(
+        () => {
+          renderPending = false;
+          lastRender = performance.now();
+          renderResults();
+        },
+        RENDER_THROTTLE - (now - lastRender),
+      );
+    }
+  }
+
+  function recount() {
+    let o = 0,
+      t = 0,
+      u = 0;
+    rows.forEach((d) => {
+      const b = bucketOf(d);
+      if (b === "open") o++;
+      else if (b === "taken") t++;
+      else if (b === "unknown") u++;
+    });
+    el.cOpen.textContent = o;
+    el.cAll.textContent = rows.length;
+    el.cTaken.textContent = t;
+    el.cUnknown.textContent = u;
+    const favInRows = rows.reduce((n, d) => n + (favorites.has(d.domain) ? 1 : 0), 0);
+    el.cFav.textContent = favInRows;
+    el.verifyAll.disabled = !rows.some((d) => stateOf(d) === "clear");
+  }
+  function setFilter(f) {
+    activeFilter = f;
+    displayLimit = DISPLAY_CAP;
+    el.flags
+      .querySelectorAll(".flag[data-f]")
+      .forEach((x) => x.setAttribute("aria-pressed", x.dataset.f === f ? "true" : "false"));
+    renderResults();
+  }
+  function setSort(s) {
+    if (s !== sortMode) {
+      sortMode = s;
+      saveDebounced();
+    }
+    displayLimit = DISPLAY_CAP;
+    el.sortbar
+      .querySelectorAll(".sopt")
+      .forEach((x) => x.setAttribute("aria-pressed", x.dataset.s === s ? "true" : "false"));
+    renderResults();
+  }
+  function toggleFavFilter() {
+    favOnly = !favOnly;
+    displayLimit = DISPLAY_CAP;
+    el.favFilter.setAttribute("aria-pressed", String(favOnly));
+    renderResults();
+  }
+  function updateUncertainFlag() {
+    const n = rows.filter((d) => stateOf(d) === "unknown").length;
+    el.flagUnknown.style.display = n > 0 ? "" : "none";
+    if (n === 0 && activeFilter === "unknown") setFilter("open");
+  }
+  el.flags
+    .querySelectorAll(".flag[data-f]")
+    .forEach((f) => (f.onclick = () => setFilter(f.dataset.f)));
+  el.favFilter.onclick = toggleFavFilter;
+  el.sortbar.querySelectorAll(".sopt").forEach((b) => (b.onclick = () => setSort(b.dataset.s)));
+
+  async function verify(d, auto) {
+    if (d.verifying || (d.rdap && (d.rdap.state === "open" || d.rdap.state === "registered")))
+      return;
+    d.verifying = true;
+    if (!auto) scheduleRender();
+    const res = await rdapCheck(d.domain, { pacer });
+    d.verifying = false;
+    if (res.state === "open" || res.state === "registered") {
+      d.rdap = res;
+      cacheSet(d);
+    }
+    if (!auto) {
+      recount();
+      scheduleRender();
+      updateUncertainFlag();
+      saveDebounced();
+    }
+  }
+  function toggleFav(domain) {
+    if (favorites.has(domain)) favorites.delete(domain);
+    else favorites.add(domain);
+    saveDebounced();
+    const favInRows = rows.reduce((n, d) => n + (favorites.has(d.domain) ? 1 : 0), 0);
+    el.cFav.textContent = favInRows;
+    if (favOnly) renderResults();
+  }
+  el.verifyAll.onclick = async () => {
+    const open = rows.filter((d) => stateOf(d) === "clear" && !d.verifying);
+    if (!open.length) return;
+    el.verifyAll.disabled = true;
+    aborted = false;
+    let done = 0;
+    const tot = open.length;
+    for (let i = 0; i < open.length; i += CONFIRM_CHUNK) {
+      if (aborted) break;
+      const chunk = open.slice(i, i + CONFIRM_CHUNK);
+      await pool(chunk, RDAP_CONC, (d) => verify(d, true), () => aborted);
+      done += chunk.length;
+      el.verifyAll.textContent = `[ confirming ${done}/${tot}\u2026 ]`;
+      recount();
+      renderResults();
+      updateUncertainFlag();
+    }
+    el.verifyAll.textContent = "[ confirm all open ]";
+    recount();
+    updateUncertainFlag();
+    saveState();
+  };
+
+  // ===== sweep =====
+  function resetResults() {
+    rows = [];
+    batchSeq = 0;
+    seqCounter = 0;
+    displayLimit = DISPLAY_CAP;
+    lastSweepSig = null;
+    el.rows.innerHTML = "";
+    el.resEmpty.textContent = "";
+    el.readout.classList.remove("show");
+    el.resPanel.style.display = "none";
+    setNotice("nonew", null);
+    setNotice("cap2", null);
+    recount();
+    refreshRunButton();
+  }
+  function drawBar(f) {
+    const n = Math.round(f * BAR_CELLS);
+    el.bar.textContent = "\u2588".repeat(n) + "\u2591".repeat(BAR_CELLS - n);
+    el.pct.textContent = Math.round(f * 100) + "%";
+  }
+
+  // signature of the inputs that define the result set
+  function currentSig() {
+    const ws = groups.map((g) => [...g].sort().join(",")).join("|");
+    return (effectiveBoth() ? "1" : "0") + "::" + ws;
+  }
+  function runMode() {
+    if (!rows.length) return "sweep";
+    return currentSig() !== lastSweepSig ? "update" : "rerun";
+  }
+  function refreshRunButton() {
+    if (sweeping) return;
+    const m = runMode();
+    el.run.textContent = m === "update" ? "\u21bb update" : "\u25b8 search";
+    el.run.classList.toggle("ischanged", m === "update");
+  }
+  function setSweeping(on) {
+    sweeping = on;
+    el.run.classList.toggle("stopping", on);
+    if (on) {
+      el.run.textContent = "\u25a0 stop";
+      el.run.classList.remove("ischanged");
+    } else refreshRunButton();
+  }
+
+  // drop rows whose source words left the set, or reversed rows when bothOrders turned off.
+  // pruned rows stay in resultCache for fast recall; they just leave the visible/working set.
+  function pruneStaleRows() {
+    const live = new Set(allWords());
+    // valid combinations given current groups + order rules
+    const validKeys = new Set();
+    buildCombos(groups, effectiveBoth()).forEach((c) => validKeys.add(c.parts.join(" ")));
+    const before = rows.length;
+    rows = rows.filter((d) => {
+      if (Array.isArray(d.parts) && d.parts.length) {
+        if (d.parts.some((w) => !live.has(w))) return false;
+        return validKeys.has(d.parts.join(" "));
+      }
+      // legacy rows without parts: keep (can't evaluate safely)
+      return true;
+    });
+    return before - rows.length;
+  }
+
+  async function sweep() {
+    const total = pairCount(effectiveBoth());
+    if (total < 1) {
+      updateEstimate();
+      el.input.focus();
+      return;
+    }
+    // buildCombos shuffles + samples down to MAX_COMBOS when over the cap
+    const combos = buildCombos(groups, effectiveBoth(), MAX_COMBOS).map((c) => ({
+      domain: c.l + ".com",
+      parts: c.parts,
+    }));
+    if (total > MAX_COMBOS) {
+      setNotice(
+        "cap",
+        `${total.toLocaleString()} pairs requested; checking a random ${MAX_COMBOS.toLocaleString()} sample. split into groups, or raise MAX_COMBOS, to cover more.`,
+      );
+    } else setNotice("cap", null);
+
+    // prune results whose words were removed / invalidated by bothOrders toggle (kept in cache)
+    const pruned = pruneStaleRows();
+    if (pruned) {
+      recount();
+      renderResults();
+    }
+
+    // skip combos already present in this session (only check genuinely-new pairs)
+    const existing = new Set(rows.map((r) => r.domain));
+    const fresh = combos.filter((c) => !existing.has(c.domain));
+    if (!fresh.length) {
+      lastSweepSig = currentSig();
+      refreshRunButton();
+      if (pruned) {
+        setNotice("nonew", null);
+        el.seg.textContent = `\u00b7 updated \u00b7 removed ${pruned.toLocaleString()} \u00b7 no new combinations`;
+        recount();
+        renderResults();
+        saveState();
+      } else
+        setNotice(
+          "nonew",
+          `no new combinations; all ${combos.length.toLocaleString()} already in this session. clear results, or add new words.`,
+        );
+      el.input.focus();
+      return;
+    }
+    setNotice("nonew", null);
+
+    aborted = false;
+    netFail = 0;
+    netDone = 0;
+    displayLimit = DISPLAY_CAP;
+    el.resEmpty.textContent = "";
+    el.netBanner.classList.remove("show");
+    expandTop();
+    el.resPanel.style.display = "";
+    el.readout.classList.add("show");
+    setSweeping(true);
+    setFilter("open");
+    el.seg.textContent = "";
+    drawBar(0);
+
+    // new batch (each search appends below the last)
+    batchSeq++;
+    const myBatch = batchSeq;
+    const newRows = fresh.map((c) => ({
+      domain: c.domain,
+      parts: c.parts,
+      dns: null,
+      rdap: null,
+      verifying: false,
+      seq: seqCounter++,
+    }));
+    rows = rows.concat(newRows);
+    const needDNS = [];
+    newRows.forEach((d) => {
+      const c = resultCache.get(d.domain);
+      if (c) {
+        d.dns = c.dns;
+        d.rdap = c.rdap || null;
+      } else needDNS.push(d);
+    });
+    recount();
+    renderResults();
+
+    let done = 0;
+    const denom = needDNS.length || 1;
+    if (!needDNS.length) drawBar(1);
+    await pool(
+      needDNS,
+      DOH_CONC,
+      async (d) => {
+        d.dns = await dohNS(d.domain, { pacer, onNet });
+        cacheSet(d);
+        done++;
+        if (done % RECOUNT_EVERY === 0) {
+          drawBar(done / denom);
+          el.seg.textContent = `\u00b7 dns ${done.toLocaleString()}/${needDNS.length.toLocaleString()}`;
+          recount();
+          scheduleRender();
+        }
+      },
+      () => aborted,
+    );
+    drawBar(1);
+    recount();
+
+    if (!aborted) {
+      const uncertain = newRows.filter((d) => stateOf(d) === "unknown");
+      if (uncertain.length && uncertain.length <= AUTO_T2_MAX) {
+        el.seg.textContent = `\u00b7 resolving ${uncertain.length} uncertain\u2026`;
+        let u = 0;
+        await pool(
+          uncertain,
+          RDAP_CONC,
+          async (d) => {
+            await verify(d, true);
+            if (++u % 5 === 0) {
+              recount();
+              scheduleRender();
+            }
+          },
+          () => aborted,
+        );
+      } else if (uncertain.length)
+        setNotice(
+          "cap2",
+          `${uncertain.length} uncertain left unconfirmed (over the ${AUTO_T2_MAX} auto-confirm limit); use --uncertain + confirm to resolve.`,
+        );
+    }
+
+    const bOpen = newRows.filter((d) => stateOf(d) === "clear" || stateOf(d) === "go").length;
+    const open = rows.filter((d) => stateOf(d) === "clear" || stateOf(d) === "go").length;
+    const left = rows.filter((d) => stateOf(d) === "unknown").length;
+    const prunedNote = pruned ? ` \u00b7 removed ${pruned.toLocaleString()}` : "";
+    el.seg.textContent = `${aborted ? "\u00b7 stopped" : "\u00b7 done"} \u00b7 batch ${myBatch}: ${bOpen.toLocaleString()} open${left ? ` \u00b7 ${left.toLocaleString()} uncertain` : ""}${prunedNote}`;
+    if (!aborted) {
+      lastSweepSig = currentSig();
+    }
+    recount();
+    renderResults();
+    updateUncertainFlag();
+    setSweeping(false);
+    saveState();
+
+    // on mobile the results pane is short: collapse the controls so results fill the screen
+    if (!aborted && isMobile()) animateTop(true);
+
+    if (netDone > 0 && netFail >= netDone * 0.6) {
+      el.netBanner.innerHTML =
+        "<b>Network calls were blocked here.</b> This sandbox can't reach DNS/RDAP. Host the file and open it in a real browser, and the live checks will run.";
+      el.netBanner.classList.add("show");
+    }
+  }
+
+  // ===== import / export =====
+  function toast(msg) {
+    el.toast.textContent = msg;
+    el.toast.classList.add("show");
+    clearTimeout(toastT);
+    toastT = setTimeout(() => el.toast.classList.remove("show"), 1900);
+  }
+  function exportJSON() {
+    const results = {};
+    resultCache.forEach((v, k) => {
+      results[k] = v;
+    });
+    const data = {
+      slugseek: 1,
+      exported: new Date().toISOString(),
+      bothOrders: el.reversed.checked,
+      groups,
+      words: allWords(),
+      favorites: [...favorites],
+      results,
+    };
+    const json = JSON.stringify(data, null, 2);
+    try {
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `slugseek-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (e) {}
+    navigator.clipboard?.writeText(json).then(
+      () => toast("exported · also copied to clipboard"),
+      () => toast("exported"),
+    );
+  }
+  function applyImport(text) {
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      toast("import failed: not valid json");
+      return;
+    }
+    snapshot();
+    if (Array.isArray(data.groups) && data.groups.length)
+      groups = data.groups.map((g) =>
+        Array.isArray(g) ? g.map((w) => String(w).toLowerCase()).filter(Boolean) : [],
+      );
+    else
+      groups = [
+        Array.isArray(data.words)
+          ? data.words.map((w) => String(w).toLowerCase()).filter(Boolean)
+          : [],
+      ];
+    if (!groups.length) groups = [[]];
+    // cap at 3 groups: fold any extras into the third (prefix × root × suffix max)
+    if (groups.length > 3) {
+      const extra = groups.slice(3).flat();
+      groups = groups.slice(0, 3);
+      extra.forEach((w) => {
+        if (!groups[2].includes(w)) groups[2].push(w);
+      });
+    }
+    activeGroup = groups.length - 1;
+    el.reversed.checked = data.bothOrders !== false;
+    resultCache = new Map();
+    if (data.results && typeof data.results === "object")
+      Object.entries(data.results).forEach(([k, v]) => {
+        if (!v || typeof v !== "object") return;
+        let rdap = v.rdap;
+        if (typeof rdap === "string") rdap = { state: rdap };
+        resultCache.set(k, { dns: v.dns, rdap: rdap || undefined });
+      });
+    if (Array.isArray(data.favorites)) favorites = new Set(data.favorites.map(String));
+    resetResults();
+    reflectGrouped();
+    afterWords();
+    saveState();
+    toast(
+      `imported ${allWords().length} words${isGrouped() ? ` in ${groups.length} groups` : ""} · ${resultCache.size} cached`,
+    );
+    if (pairCount(true) >= 1) sweep();
+  }
+  el.exportBtn.onclick = exportJSON;
+  el.importBtn.onclick = () => el.importFile.click();
+  el.importFile.onchange = (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      applyImport(String(rd.result));
+      el.importFile.value = "";
+    };
+    rd.readAsText(f);
+  };
+
+  // ===== privacy / terms modal =====
+  const openAbout = () => el.aboutModal.classList.add("show");
+  const closeAbout = () => el.aboutModal.classList.remove("show");
+  el.aboutBtn.onclick = openAbout;
+  el.aboutClose.onclick = closeAbout;
+  el.aboutModal.addEventListener("click", (e) => {
+    if (e.target === el.aboutModal) closeAbout(); // click the backdrop to dismiss
+  });
+
+  // ===== results focus: drag the header handle =====
+  let topCollapsed = false;
+  function animateTop(collapse) {
+    if (collapse === topCollapsed) return;
+    topCollapsed = collapse;
+    const tz = el.topZone;
+    if (collapse) {
+      tz.style.maxHeight = tz.scrollHeight + "px";
+      void tz.offsetHeight;
+      tz.classList.add("collapsed");
+      tz.style.maxHeight = "0px";
+    } else {
+      tz.classList.remove("collapsed");
+      tz.style.maxHeight = tz.scrollHeight + "px";
+      setTimeout(() => {
+        if (!topCollapsed) tz.style.maxHeight = "";
+      }, 460);
+    }
+  }
+  function expandTop() {
+    animateTop(false);
+  }
+  el.sheetHandle.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    e.preventDefault();
+    let startY = e.clientY,
+      moved = false;
+    const onMove = (ev) => {
+      const dy = ev.clientY - startY;
+      if (Math.abs(dy) > 5) moved = true;
+      if (dy < -22) {
+        animateTop(true);
+        startY = ev.clientY;
+      } else if (dy > 22) {
+        animateTop(false);
+        startY = ev.clientY;
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      if (!moved) animateTop(!topCollapsed);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  });
+
+  // ===== wire up =====
+  function addFromInput() {
+    addMany(el.input.value);
+    el.input.value = "";
+    el.input.focus();
+  }
+  el.add.onclick = addFromInput;
+  el.input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addFromInput();
+    } else if (e.key === "Escape") el.input.value = "";
+  });
+  el.clearWords.onclick = clearAll;
+  el.undoBtn.onclick = undo;
+  el.run.onclick = () => {
+    if (sweeping) aborted = true;
+    else sweep();
+  };
+  el.reversed.addEventListener("change", () => {
+    updateEstimate();
+    refreshRunButton();
+    saveDebounced();
+  });
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      if (!sweeping) sweep();
+    } else if ((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z")) {
+      if (document.activeElement !== el.input) {
+        e.preventDefault();
+        undo();
+      }
+    } else if (e.key === "Escape") {
+      if (popOpen) closePop();
+      else if (el.aboutModal.classList.contains("show")) closeAbout();
+    }
+  });
+  window.addEventListener("resize", () => {
+    if (popOpen) closePop();
+    expandTop();
+  });
+
+  el.rows.addEventListener(
+    "scroll",
+    () => {
+      if (scorePanelFor) hideScorePanel();
+    },
+    { passive: true },
+  );
+  window.addEventListener("resize", () => {
+    if (scorePanelFor) hideScorePanel();
+  });
+
+  loadState();
+  renderWords();
+  updateEstimate();
+  reflectGrouped();
+  el.sortbar
+    .querySelectorAll(".sopt")
+    .forEach((x) => x.setAttribute("aria-pressed", x.dataset.s === sortMode ? "true" : "false"));
+  refreshRunButton();
+})();
+</script>
+</body>
+</html>

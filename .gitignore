@@ -1,0 +1,24 @@
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# local server / tooling
+node_modules/
+.cache/
+
+# local exports from the app
+slugseek-*.json
+
+# Deployment notes (local only)
+DEPLOY.md
+
+# Claude Code: local-only (personal config + strategic roadmap)
+.claude/settings.json
+.claude/settings.local.json
+.claude/skills/roadmap/
+
+# task board: local-only, kept inside .claude
+.claude/tasks/
