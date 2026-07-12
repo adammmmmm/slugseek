@@ -79,10 +79,15 @@ brandability is the product. Treat these as a scoring rubric, not vibes.
   important correction: distrust high scores on vacant compounds.
 - **No semantic overlap between halves:** near-synonyms say one thing twice
   (tautological). Each half must add a distinct concept. Penalize synonym pairs.
-- **Generic filler prefixes are dead weight** (`meet-`, `my-`, `the-`, `go-`, and
-  `get-`/`try-` *when they add nothing*). Test: delete the prefix; if the rest is
-  the real brand, the prefix is filler. (The get-/try- convention holds when
-  *intentional*; the penalty is for filler.)
+- **Prefix vs suffix order is load-bearing (startup domains).** Real patterns:
+  `the`/`try`/`get`/`go`/`use` **before** the product noun (`thehive`, `tryhive`,
+  `getnotion`) are valuable brandable domains for a product named Hive/Notion.
+  The **reverse** (`hivethe`, `hivetry`) is almost never a name: articles and CTA
+  verbs as the second half should be hard-penalized. `my-` is weaker as a prefix
+  than `the-`/`try-` but still better than as a suffix. Score **position**, not
+  the token alone.
+- **Generic hype prefixes** (`best-`, `top-`, `super-`, `ultra-`) are usually dead
+  weight. Possessives (`my-`, `our-`) are mild penalties as prefixes only.
 - **TLD is a HARD GATE, not a soft penalty.** A non-`.com` TLD is OK ONLY when it
   completes/reinforces meaning (reads as a unit with the SLD). Generic TLD on an
   unrelated word = dealbreaker. For the `.com`-only tool: stay `.com`.

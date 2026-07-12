@@ -39,9 +39,9 @@ assert(typeof sc.score === "number", "scoreDomain should return a numeric score"
 console.log(`scoreDomain("swiftforge") = ${sc.score}  (syl ${sc.syl}, len ${sc.len})`);
 
 // semantic / seam scoring --------------------------------------------------
-const filler = scoreDomain("myforge", ["my", "forge"]);
-assert(filler.flags.includes("filler"), "filler prefix should flag myforge");
-assert(filler.score < sc.score, "filler should score below a clean compound");
+const poss = scoreDomain("myforge", ["my", "forge"]);
+assert(poss.notes.includes("possessive-prefix"), "myforge should note possessive prefix");
+assert(poss.score < sc.score, "possessive my- should score below a clean compound");
 
 const syn = scoreDomain("labforge", ["lab", "forge"]);
 assert(syn.flags.includes("synonym"), "lab+forge should flag synonym overlap");
@@ -55,6 +55,24 @@ assert(taut.flags.includes("tautology"), "lab+labs should flag same stem");
 // seam-only bad read: token forms only across the join, not inside either half
 const badSeam = scoreDomain("cumquat", ["cu", "mquat"]);
 assert(badSeam.flags.includes("bad-seam"), "cu+mquat should flag unfortunate seam");
+
+// Startup domain order: TheHive / TryHive are brand forms; reverse is dead.
+const theHive = scoreDomain("thehive", ["the", "hive"]);
+const hiveThe = scoreDomain("hivethe", ["hive", "the"]);
+const tryHive = scoreDomain("tryhive", ["try", "hive"]);
+const hiveTry = scoreDomain("hivetry", ["hive", "try"]);
+assert(theHive.flags.includes("brand-prefix"), "thehive should get brand-prefix");
+assert(theHive.score >= 95, `thehive should be near-top (got ${theHive.score})`);
+assert(hiveThe.flags.includes("dead-suffix"), "hivethe should flag dead-suffix");
+assert(hiveThe.score <= 60, `hivethe should score poorly (got ${hiveThe.score})`);
+assert(theHive.score > hiveThe.score + 25, "thehive must crush hivethe");
+assert(tryHive.flags.includes("brand-prefix"), "tryhive should get brand-prefix");
+assert(tryHive.score >= 85, `tryhive should score high (got ${tryHive.score})`);
+assert(hiveTry.flags.includes("dead-suffix"), "hivetry should flag dead-suffix");
+assert(tryHive.score > hiveTry.score + 20, "tryhive must crush hivetry");
+console.log(
+  `  order: thehive=${theHive.score} hivethe=${hiveThe.score} tryhive=${tryHive.score} hivetry=${hiveTry.score}`,
+);
 
 // deep-check helpers (no network) ------------------------------------------
 const links = deepCheckLinks("swiftforge.com");
