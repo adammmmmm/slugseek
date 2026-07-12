@@ -13,7 +13,7 @@
 // The --file/--stdin JSON uses the same shape as an in-app export
 // (seed-wordset.json): { groups: [[...],[...]], bothOrders: true }.
 
-import { findNames } from "./engine.js";
+import { findNames, attachDeepCheck, DEEP_CHECK_MAX } from "./engine.js";
 
 const HELP = `slugseek: headless .com name finder
 
@@ -36,13 +36,20 @@ Output options:
   --open-only            only rows whose state is "open"
   --min-score <n>        only rows scoring >= n
   --limit <n>            keep at most n rows (after filtering)
+  --deep-check           attach USPTO/web diligence links (shortlist only;
+                         applies after filters; hard-capped at ${DEEP_CHECK_MAX})
+  --deep-check-max <n>   cap deep-check rows (default ${DEEP_CHECK_MAX}, max ${DEEP_CHECK_MAX})
   --verbose              include the full score breakdown per row
   --pretty               indent the JSON output
   --progress             print "done/total" progress to stderr
   -h, --help             this message
 
 Output: { ok, count, total, config, results } on stdout.
-Each result: { domain, parts, dns, rdap, state, score } (+ scoreDetail if --verbose).`;
+Each result: { domain, parts, dns, rdap, state, score } (+ scoreDetail if --verbose)
+(+ deepCheck links if --deep-check).
+
+Deep-check never runs on the full unfiltered sweep: use --open-only and/or
+--limit so diligence stays proportional to a shortlist, not thousands of combos.`;
 
 // ---- tiny flag parser ----------------------------------------------------
 function parseArgs(argv) {
@@ -60,6 +67,7 @@ function parseArgs(argv) {
       "rdap-conc",
       "min-score",
       "limit",
+      "deep-check-max",
     ].includes(key);
     if (takesValue) {
       flags[key] = argv[++i];
@@ -172,6 +180,21 @@ if (flags["min-score"] != null) {
 }
 if (flags.limit != null) out = out.slice(0, Math.max(0, num(flags.limit, out.length)));
 
+// Deep-check is shortlist-only: only after filters/limit, hard-capped.
+const deepCheck = !!flags["deep-check"];
+const deepMax = Math.max(
+  0,
+  Math.min(DEEP_CHECK_MAX, num(flags["deep-check-max"], DEEP_CHECK_MAX)),
+);
+if (deepCheck) {
+  if (!flags["open-only"] && flags.limit == null && out.length > deepMax) {
+    process.stderr.write(
+      `note: --deep-check without --open-only/--limit; attaching links to top ${deepMax} of ${out.length} only\n`,
+    );
+  }
+  out = attachDeepCheck(out, deepMax).concat(out.slice(deepMax));
+}
+
 const results = out.map((r) => {
   const row = {
     domain: r.domain,
@@ -182,6 +205,7 @@ const results = out.map((r) => {
     score: r.score.score,
   };
   if (flags.verbose) row.scoreDetail = r.score;
+  if (r.deepCheck) row.deepCheck = r.deepCheck;
   return row;
 });
 
@@ -189,7 +213,13 @@ const payload = {
   ok: true,
   count: results.length,
   total,
-  config: { bothOrders, confirm: config.confirm, maxCombos: config.maxCombos },
+  config: {
+    bothOrders,
+    confirm: config.confirm,
+    maxCombos: config.maxCombos,
+    deepCheck,
+    deepCheckMax: deepCheck ? deepMax : undefined,
+  },
   results,
 };
 
