@@ -27,11 +27,12 @@ imports the engine and owns all UI/DOM/render/cache logic.
 - **`engine.js`**: `buildCombos()`, `scoreDomain()` (phonetics + lightweight
   semantics), `deepCheckLinks`/`attachDeepCheck`/`formatDeepCheckText` (shortlist
   diligence, max 20), `dohNS`/`rdapCheck`/`pool`/`makePacer`, `findNames()`
-  (headless pipeline).
-- **`index.html`** tunable constants (top of `<script>`, ~line 1494+): `REGISTRAR`,
+  (shared DNS/RDAP pipeline for CLI and UI; optional cache/incremental/
+  confirm-mode hooks).
+- **`index.html`** tunable constants (top of `<script>`): `REGISTRAR`,
   `MAX_COMBOS`, `DOH_CONC`, `RDAP_CONC`, `AUTO_T2_MAX`, `DISPLAY_CAP`/
-  `SHOW_MORE_CHUNK`, `CACHE_STORE_MAX`. UI orchestration: `sweep()` ~line 2674
-  (DOM wrapper around the engine).
+  `SHOW_MORE_CHUNK`, `CACHE_STORE_MAX`. `sweep()` owns session incremental
+  batching + progressive render, then calls `findNames` for network checks.
 
 ## Hard constraints (don't regress)
 - **`.com` only** by design.

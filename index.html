@@ -1641,7 +1641,7 @@ button.run:disabled {
 import {
   buildCombos,
   scoreDomain,
-  dohNS,
+  findNames,
   rdapCheck,
   pool,
   makePacer,
@@ -2518,7 +2518,7 @@ import {
     return d._score;
   }
 
-  // ===== network: dohNS/rdapCheck/pool now imported from engine.js =====
+  // ===== network: findNames/rdapCheck/pool imported from engine.js =====
 
   // ===== results: data-first, windowed DOM =====
   function stateOf(d) {
@@ -3089,56 +3089,48 @@ import {
       seq: seqCounter++,
     }));
     rows = rows.concat(newRows);
-    const needDNS = [];
-    newRows.forEach((d) => {
-      const c = resultCache.get(d.domain);
-      if (c) {
-        d.dns = c.dns;
-        d.rdap = c.rdap || null;
-      } else needDNS.push(d);
-    });
     recount();
     renderResults();
 
-    let done = 0;
-    const denom = needDNS.length || 1;
-    if (!needDNS.length) drawBar(1);
-    await pool(
-      needDNS,
-      DOH_CONC,
-      async (d) => {
-        d.dns = await dohNS(d.domain, { pacer, onNet });
-        cacheSet(d);
-        done++;
-        if (done % RECOUNT_EVERY === 0) {
-          drawBar(done / denom);
+    // Network orchestration lives in findNames (same path as CLI). UI owns
+    // cache persistence, progressive render, and session row identity.
+    await findNames({
+      rows: newRows,
+      confirm: "unknown",
+      autoConfirmUnknownMax: AUTO_T2_MAX,
+      getCached: (domain) => resultCache.get(domain),
+      dohConc: DOH_CONC,
+      rdapConc: RDAP_CONC,
+      pacer,
+      onNet,
+      sort: false,
+      shouldStop: () => aborted,
+      onResult: (d) => {
+        if (d.dns != null) cacheSet(d);
+      },
+      onProgress: (done, total, meta) => {
+        const phase = meta && meta.phase;
+        if (phase === "rdap") {
+          if (done % 5 === 0 || done === total) {
+            recount();
+            scheduleRender();
+          }
+          return;
+        }
+        // dns phase (and empty needDNS: done=0,total=0 -> full bar after)
+        if (!total) {
+          drawBar(1);
+          return;
+        }
+        if (done % RECOUNT_EVERY === 0 || done === total) {
+          drawBar(done / total);
           recount();
           scheduleRender();
         }
       },
-      () => aborted,
-    );
+    });
     drawBar(1);
     recount();
-
-    if (!aborted) {
-      const uncertain = newRows.filter((d) => stateOf(d) === "unknown");
-      if (uncertain.length && uncertain.length <= AUTO_T2_MAX) {
-        let u = 0;
-        await pool(
-          uncertain,
-          RDAP_CONC,
-          async (d) => {
-            await verify(d, true);
-            if (++u % 5 === 0) {
-              recount();
-              scheduleRender();
-            }
-          },
-          () => aborted,
-        );
-      }
-    }
 
     if (!aborted) {
       lastSweepSig = currentSig();
