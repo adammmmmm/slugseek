@@ -648,34 +648,36 @@ function stateOf(d) {
   return "unknown";
 }
 
-// ===== headless orchestration =====
-// The DOM-free equivalent of the UI's sweep(): buildCombos → DNS pass →
-// RDAP-confirm the open candidates → attach scores → sort best-first.
-//
-// config: {
-//   groups: [["swift","bright"], ["lab","forge"]],  // cross-group combined
-//   bothOrders: true,
-//   confirm: true,        // run RDAP confirm on open candidates (default true)
-//   maxCombos: 10000,
-//   dohConc: 12, rdapConc: 3,
-//   onProgress: (done, total) => {},  // optional, fired during the DNS pass
-//   shouldStop: () => false,          // optional cancel hook
-// }
-// returns: [{ domain, a, b, parts, dns, rdap, state, score }] sorted best-first.
-export async function findNames(config = {}) {
-  const {
-    groups = [],
-    bothOrders = true,
-    confirm = true,
-    maxCombos = 10000,
-    dohConc = 12,
-    rdapConc = 3,
-    onProgress,
-    shouldStop = () => false,
-  } = config;
+function hasDefinitiveRdap(d) {
+  return !!(d.rdap && (d.rdap.state === "open" || d.rdap.state === "registered"));
+}
 
-  const combos = buildCombos(groups, bothOrders, maxCombos);
-  const rows = combos.map((c) => ({
+// true / 'clear' → RDAP every DNS-clear row (CLI default).
+// 'unknown' → RDAP only DNS-uncertain rows (UI auto-T2 path).
+// false → skip RDAP.
+function normalizeConfirm(confirm) {
+  if (confirm === false || confirm === 0 || confirm === "none" || confirm === "off") return false;
+  if (confirm === "unknown" || confirm === "uncertain") return "unknown";
+  if (confirm === true || confirm === "clear" || confirm === "open") return "clear";
+  return confirm ? "clear" : false;
+}
+
+function cacheLookup(domain, seedCache, getCached) {
+  if (typeof getCached === "function") {
+    const v = getCached(domain);
+    if (v != null) return v;
+  }
+  if (!seedCache) return null;
+  if (typeof seedCache.get === "function") {
+    const v = seedCache.get(domain);
+    return v == null ? null : v;
+  }
+  if (Object.prototype.hasOwnProperty.call(seedCache, domain)) return seedCache[domain];
+  return null;
+}
+
+function rowFromCombo(c) {
+  return {
     domain: c.l + ".com",
     a: c.parts[0],
     b: c.parts[1],
@@ -683,47 +685,193 @@ export async function findNames(config = {}) {
     dns: null,
     rdap: null,
     state: "unknown",
-  }));
+  };
+}
 
-  const pacer = makePacer();
-  const total = rows.length;
+function rowFromDomainEntry(entry) {
+  if (typeof entry === "string") {
+    const domain = entry.endsWith(".com") ? entry : entry + ".com";
+    const label = domain.slice(0, -4);
+    return {
+      domain,
+      a: label,
+      b: undefined,
+      parts: [label],
+      dns: null,
+      rdap: null,
+      state: "unknown",
+    };
+  }
+  const parts =
+    Array.isArray(entry.parts) && entry.parts.length
+      ? entry.parts
+      : [entry.a, entry.b].filter(Boolean);
+  const domain =
+    entry.domain ||
+    (entry.l ? entry.l + ".com" : parts.length ? parts.join("") + ".com" : null);
+  return {
+    domain,
+    a: entry.a ?? parts[0],
+    b: entry.b ?? parts[1],
+    parts,
+    dns: entry.dns ?? null,
+    rdap: entry.rdap ?? null,
+    state: entry.state ?? "unknown",
+  };
+}
+
+// ===== headless orchestration =====
+// Shared DNS → RDAP pipeline for CLI and UI.
+//
+// config: {
+//   groups: [["swift","bright"], ["lab","forge"]],  // cross-group combined
+//   bothOrders: true,
+//   // Candidate sources (first match wins):
+//   //   rows: existing row objects (mutated in place; UI progressive path)
+//   //   domains: [{domain, parts}|string, ...] prebuilt list
+//   //   groups: build via buildCombos (CLI default)
+//   skipDomains: Set|array,  // drop these after building from groups/domains
+//   confirm: true,        // true|'clear' = RDAP all DNS-clear (CLI default)
+//                         // 'unknown' = RDAP DNS-uncertain only (UI auto-T2)
+//                         // false = DNS only
+//   autoConfirmUnknownMax: n, // with confirm:'unknown', skip RDAP if count > n
+//   maxCombos: 10000,
+//   dohConc: 12, rdapConc: 3,
+//   seedCache: Map|object,    // domain → {dns, rdap}; reuse, skip network
+//   getCached: (domain) => {dns, rdap}|null,  // alt cache lookup
+//   pacer, onNet,             // optional shared pacer / net probe hooks
+//   onProgress: (done, total, meta?) => {},  // meta.phase: 'dns'|'rdap'
+//   onResult: (row) => {},    // after each DNS/RDAP update (and cache hits)
+//   shouldStop: () => false,
+//   sort: true,               // best-first sort (set false for UI append batches)
+// }
+// returns: [{ domain, a, b, parts, dns, rdap, state, score }, ...]
+export async function findNames(config = {}) {
+  const {
+    groups = [],
+    bothOrders = true,
+    rows: inputRows,
+    domains,
+    skipDomains,
+    confirm = true,
+    autoConfirmUnknownMax,
+    maxCombos = 10000,
+    dohConc = 12,
+    rdapConc = 3,
+    seedCache,
+    getCached,
+    pacer: externalPacer,
+    onNet,
+    onProgress,
+    onResult,
+    shouldStop = () => false,
+    sort = true,
+  } = config;
+
+  let rows;
+  if (Array.isArray(inputRows)) {
+    // UI path: mutate the caller's objects so progressive render sees updates.
+    rows = inputRows;
+  } else if (Array.isArray(domains)) {
+    rows = domains.map(rowFromDomainEntry);
+  } else {
+    const combos = buildCombos(groups, bothOrders, maxCombos);
+    rows = combos.map(rowFromCombo);
+  }
+
+  if (skipDomains) {
+    const skip =
+      skipDomains instanceof Set
+        ? skipDomains
+        : new Set(Array.isArray(skipDomains) ? skipDomains : [...skipDomains]);
+    rows = rows.filter((d) => !skip.has(d.domain));
+  }
+
+  const pacer = externalPacer || makePacer();
+  const confirmMode = normalizeConfirm(confirm);
+
+  // Seed from cache (or keep pre-filled dns/rdap on input rows).
+  for (const d of rows) {
+    if (d.dns != null) {
+      if (onResult) onResult(d);
+      continue;
+    }
+    const cached = cacheLookup(d.domain, seedCache, getCached);
+    if (cached && cached.dns != null) {
+      d.dns = cached.dns;
+      if (cached.rdap) d.rdap = cached.rdap;
+      if (onResult) onResult(d);
+    }
+  }
+
+  // Tier 1: DNS for rows still missing a dns signal.
+  const needDNS = rows.filter((d) => d.dns == null);
   let done = 0;
-
-  // Tier 1: DNS over all combos.
-  await pool(
-    rows,
-    dohConc,
-    async (d) => {
-      d.dns = await dohNS(d.domain, { pacer });
-      done++;
-      if (onProgress) onProgress(done, total);
-    },
-    shouldStop,
-  );
-
-  // Tier 2: RDAP confirm the open candidates.
-  if (confirm && !shouldStop()) {
-    const candidates = rows.filter((d) => d.dns === "clear");
+  const dnsTotal = needDNS.length;
+  if (dnsTotal === 0) {
+    if (onProgress) onProgress(0, 0, { phase: "dns" });
+  } else {
     await pool(
-      candidates,
-      rdapConc,
+      needDNS,
+      dohConc,
       async (d) => {
-        const res = await rdapCheck(d.domain, { pacer });
-        if (res.state === "open" || res.state === "registered") d.rdap = res;
+        d.dns = await dohNS(d.domain, { pacer, onNet });
+        done++;
+        if (onResult) onResult(d);
+        if (onProgress) onProgress(done, dnsTotal, { phase: "dns" });
       },
       shouldStop,
     );
   }
 
-  // Attach scores + final state, then sort best-first.
+  // Tier 2: RDAP per confirm mode.
+  if (confirmMode && !shouldStop()) {
+    let candidates;
+    if (confirmMode === "clear") {
+      // CLI default: authoritative-confirm every DNS-clear candidate.
+      candidates = rows.filter((d) => d.dns === "clear" && !hasDefinitiveRdap(d));
+    } else {
+      // UI auto-T2: only DNS-uncertain rows, and only when the batch is small.
+      candidates = rows.filter((d) => d.dns === "unknown" && !hasDefinitiveRdap(d));
+      if (
+        autoConfirmUnknownMax != null &&
+        candidates.length > autoConfirmUnknownMax
+      ) {
+        candidates = [];
+      }
+    }
+
+    let rdapDone = 0;
+    const rdapTotal = candidates.length;
+    if (rdapTotal) {
+      await pool(
+        candidates,
+        rdapConc,
+        async (d) => {
+          const res = await rdapCheck(d.domain, { pacer });
+          if (res.state === "open" || res.state === "registered") d.rdap = res;
+          rdapDone++;
+          if (onResult) onResult(d);
+          if (onProgress) onProgress(rdapDone, rdapTotal, { phase: "rdap" });
+        },
+        shouldStop,
+      );
+    }
+  }
+
+  // Attach scores + final state, then optionally sort best-first.
   rows.forEach((d) => {
     const label = d.domain.replace(/\.com$/, "");
     d.score = scoreDomain(label, d.parts);
     d.state = stateOf(d);
   });
-  rows.sort(
-    (x, y) =>
-      y.score.score - x.score.score || x.domain.length - y.domain.length || (x.domain < y.domain ? -1 : 1),
-  );
+  if (sort) {
+    rows.sort(
+      (x, y) =>
+        y.score.score - x.score.score ||
+        x.domain.length - y.domain.length ||
+        (x.domain < y.domain ? -1 : 1),
+    );
+  }
   return rows;
 }

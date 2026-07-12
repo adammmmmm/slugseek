@@ -52,13 +52,20 @@ const results = await findNames({
     ['lab', 'forge'],
   ],
   bothOrders: true, // also try root × modifier
-  confirm: true, // RDAP-confirm the open candidates (default true)
+  confirm: true, // RDAP-confirm DNS-clear candidates (default true; same as 'clear')
   maxCombos: 10000,
-  onProgress: (done, total) => {}, // optional
+  onProgress: (done, total) => {}, // optional; third arg meta.phase is 'dns'|'rdap'
 })
 // → [{ domain, a, b, dns, state, score: { score, syl, len, flags, breakdown } }, …]
 //   sorted best-first by brandability score
 ```
+
+Optional knobs used by the UI (and available headless): `confirm: 'unknown'` with
+`autoConfirmUnknownMax` (auto-RDAP only uncertain rows when the batch is small),
+`rows` / `domains` / `skipDomains` for incremental batches, `seedCache` or
+`getCached(domain)` to reuse prior `{dns, rdap}`, `onResult`, shared `pacer` /
+`onNet`, and `sort: false` when the caller owns ordering. The in-app `sweep()`
+calls this same `findNames` path for DoH/RDAP.
 
 Also exported: `scoreDomain(label, parts)` (pure brandability scoring; result includes `roles` per part), `wordRole(word, position)` / `classifyParts(parts)` / `WORD_ROLES` (position-aware word-role tags), and `buildCombos(groups, bothOrders, maxCombos)` (combination generation). A tiny smoke test lives in [`test-engine.mjs`](./test-engine.mjs); CI runs `node test-engine.mjs` offline on every push/PR to `main`:
 

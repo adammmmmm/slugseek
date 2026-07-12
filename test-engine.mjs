@@ -291,6 +291,74 @@ assert(
 );
 console.log(`  deep-check: hard-cap ${DEEP_CHECK_MAX} ok`);
 
+// cache / incremental helpers (no network for seeded rows) -----------------
+const seed = new Map([
+  ["swiftlab.com", { dns: "taken" }],
+  ["brightforge.com", { dns: "clear", rdap: { state: "open" } }],
+]);
+const seeded = await findNames({
+  groups: [
+    ["swift", "bright"],
+    ["lab", "forge"],
+  ],
+  bothOrders: true,
+  confirm: false,
+  seedCache: seed,
+  sort: true,
+});
+const swiftlab = seeded.find((r) => r.domain === "swiftlab.com");
+const brightforge = seeded.find((r) => r.domain === "brightforge.com");
+assert(swiftlab && swiftlab.dns === "taken", "seedCache should supply dns");
+assert(
+  brightforge && brightforge.rdap && brightforge.rdap.state === "open",
+  "seedCache should supply rdap",
+);
+assert(brightforge.state === "open", "definitive rdap should set state open");
+
+const skipped = await findNames({
+  groups: [
+    ["swift", "bright"],
+    ["lab", "forge"],
+  ],
+  bothOrders: true,
+  confirm: false,
+  skipDomains: ["swiftlab.com", "brightforge.com"],
+  seedCache: seed,
+});
+assert(
+  skipped.every((r) => r.domain !== "swiftlab.com" && r.domain !== "brightforge.com"),
+  "skipDomains should drop listed domains",
+);
+assert(skipped.length === 6, `expected 6 after skip, got ${skipped.length}`);
+
+// in-place rows + sort:false (UI path shape)
+const liveRows = [
+  { domain: "swiftlab.com", parts: ["swift", "lab"], dns: null, rdap: null, seq: 1 },
+  { domain: "brightforge.com", parts: ["bright", "forge"], dns: null, rdap: null, seq: 2 },
+];
+const liveOut = await findNames({
+  rows: liveRows,
+  confirm: false,
+  getCached: (d) => seed.get(d),
+  sort: false,
+});
+assert(liveOut === liveRows, "rows option should return the same array");
+assert(liveRows[0].dns === "taken" && liveRows[0].seq === 1, "in-place mutate + preserve UI fields");
+assert(liveRows[0].score && typeof liveRows[0].score.score === "number", "score attached on rows path");
+
+// confirm:'unknown' with over-cap autoConfirmUnknownMax must not throw offline
+const noAuto = await findNames({
+  domains: [
+    { domain: "a.com", parts: ["a"], dns: "unknown" },
+    { domain: "b.com", parts: ["b"], dns: "unknown" },
+  ],
+  confirm: "unknown",
+  autoConfirmUnknownMax: 1, // 2 uncertain > 1 -> skip RDAP
+  sort: false,
+});
+assert(noAuto.every((r) => !r.rdap), "autoConfirmUnknownMax should skip RDAP when over cap");
+console.log("  findNames: seed/skip/rows/autoConfirmUnknownMax ok");
+
 // full headless pipeline ---------------------------------------------------
 console.log(`\nfindNames (confirm:${confirm}) …`);
 const results = await findNames({

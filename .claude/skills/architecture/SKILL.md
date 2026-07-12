@@ -7,15 +7,16 @@ description: Engine internals of index.html + engine.js, covering the two-tier a
 
 Two files, native ES modules, no bundler/build:
 - **`engine.js`:** the DOM-free name-finding engine. Pure compute + network,
-  no globals. Exports `findNames` (headless orchestration), `scoreDomain`,
-  `buildCombos`, `deepCheckLinks` / `attachDeepCheck` / `formatDeepCheckText`
-  (shortlist diligence links, max 20), plus `dohNS`/`rdapCheck`/`pool`/
-  `makePacer`/`sylCount`. Runs in the browser and in Node 18+ (global `fetch`).
+  no globals. Exports `findNames` (shared DNS/RDAP orchestration for CLI and
+  UI), `scoreDomain`, `buildCombos`, `deepCheckLinks` / `attachDeepCheck` /
+  `formatDeepCheckText` (shortlist diligence links, max 20), plus
+  `dohNS`/`rdapCheck`/`pool`/`makePacer`/`sylCount`. Runs in the browser and
+  in Node 18+ (global `fetch`).
 - **`index.html`** (inline `<style>` + `<script type="module">`): the UI.
   Imports the engine and owns all DOM/render/batch/favorites/cache/persistence
-  logic. `sweep()` is incremental (append new combos + cache reuse) and still
-  orchestrates DoH/RDAP itself rather than calling `findNames` end-to-end;
-  scoring and deep-check share the engine module.
+  logic. `sweep()` builds the incremental fresh batch (session skip, cache
+  seed hooks, progressive render), then calls `findNames` for DoH/RDAP so
+  CLI and UI cannot silently diverge on availability orchestration.
 
 The engine is intentionally stateless: the global `aborted` flag became a
 passed-in `shouldStop()`, and RDAP/DoH pacing lives in a `pacer` object the UI
@@ -63,7 +64,8 @@ direction this unlocks. Smoke test: `node test-engine.mjs`.
 | `DISPLAY_CAP` / `SHOW_MORE_CHUNK` | 600 | DOM rows rendered per window |
 | `CACHE_STORE_MAX` | 30000 | localStorage cache cap (oldest evicted) |
 
-Key functions: `scoreDomain()` in `engine.js` (~64); `scoreOf()` ~2277, `sweep()` ~2674 in `index.html`. `findNames()` (headless orchestration) `engine.js` ~318.
+Key functions: `scoreDomain()` in `engine.js`; `scoreOf()`, `sweep()` in
+`index.html`. `findNames()` is the shared orchestration entry (CLI + UI).
 
 ## Import/export JSON schema
 ```json
@@ -131,5 +133,8 @@ sandbox, and iOS Files "Quick Look" (CORS/CSP). The app detects this and shows a
 - **NXDOMAIN ≠ buyable** is rare for open `.com` (premium registry tiers are mostly
   other gTLDs). No pricing API by design; honesty copy remains in the privacy modal.
 - **`.com` only.** Other TLDs need IANA RDAP bootstrap routing (see `roadmap`).
-- **Full UI → `findNames` unify** is still open: UI needs incremental batches +
-  result cache; headless `findNames` is the agent/CLI path.
+- **UI → `findNames` unify (done):** `sweep()` uses `findNames` with
+  `confirm:'unknown'`, `autoConfirmUnknownMax`, `getCached`, `rows` (in-place),
+  `onProgress`/`onResult`, shared `pacer`/`onNet`. CLI keeps
+  `confirm:true` → RDAP all DNS-clear. Confirm-all and per-row confirm stay
+  UI-local (`verify` + `rdapCheck`/`pool`).
