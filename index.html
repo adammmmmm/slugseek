@@ -1552,6 +1552,7 @@ button.run:disabled {
               <button class="sopt" data-s="score" aria-pressed="true">score</button>
               <button class="sopt" data-s="default" aria-pressed="false">original</button>
               <button class="sopt" data-s="az"    aria-pressed="false">a&#8211;z</button>
+              <button class="sopt" data-s="favorites" aria-pressed="false" title="show starred only" aria-label="favorites">&#9733;</button>
             </span>
             <span class="resacts">
               <button class="vall" id="verifyAll" title="confirm all open (click again to stop)">[ confirm ]</button>
@@ -1906,7 +1907,12 @@ import {
           if (v && typeof v === "object") resultCache.set(k, v);
         });
       if (Array.isArray(d.favorites)) favorites = new Set(d.favorites.map(String));
-      if (d.sortMode === "default" || d.sortMode === "score" || d.sortMode === "az")
+      if (
+        d.sortMode === "default" ||
+        d.sortMode === "score" ||
+        d.sortMode === "az" ||
+        d.sortMode === "favorites"
+      )
         sortMode = d.sortMode;
       else if (d.sortMode === "grouped" || d.sortMode === "batch") sortMode = "score"; // grouped sort removed
     } catch (e) {
@@ -2759,7 +2765,9 @@ import {
     }
     return node;
   }
-  const matchesFilter = (d) => bucketOf(d) === "open";
+  // score/original/a-z: open names only. favorites: starred names (any state).
+  const matchesFilter = (d) =>
+    sortMode === "favorites" ? favorites.has(d.domain) : bucketOf(d) === "open";
   const cmpScore = (a, b) => {
     const pa = PRIO[stateOf(a)],
       pb = PRIO[stateOf(b)];
@@ -2790,15 +2798,23 @@ import {
     let subset = rows.filter(matchesFilter);
     const frag = document.createDocumentFragment();
 
-    // score = best-first (default), az = alphabetical, default = original search order
-    const cmp = sortMode === "score" ? cmpScore : sortMode === "az" ? cmpAz : cmpSeq;
+    // score = best-first (default), az = alphabetical, default = search order,
+    // favorites = starred only (still ranked best-first by score)
+    const cmp =
+      sortMode === "az" ? cmpAz : sortMode === "default" ? cmpSeq : cmpScore;
     subset.sort(cmp);
     subset.slice(0, displayLimit).forEach((d) => frag.appendChild(buildRowNode(d)));
     el.rows.innerHTML = "";
     el.rows.appendChild(frag);
     if (subset.length > displayLimit) el.rows.appendChild(makeMoreBtn(subset));
-    el.resEmpty.textContent =
-      subset.length === 0 && rows.length ? "# no open .coms: add more words" : "";
+    if (subset.length === 0 && rows.length) {
+      el.resEmpty.textContent =
+        sortMode === "favorites"
+          ? "# no favorites yet: star some names"
+          : "# no open .coms: add more words";
+    } else {
+      el.resEmpty.textContent = "";
+    }
   }
   let renderPending = false,
     lastRender = 0;
@@ -2861,6 +2877,8 @@ import {
   function toggleFav(domain) {
     if (favorites.has(domain)) favorites.delete(domain);
     else favorites.add(domain);
+    // Drop off the list immediately when un-starring in favorites filter view.
+    if (sortMode === "favorites") scheduleRender();
     saveDebounced();
   }
 
