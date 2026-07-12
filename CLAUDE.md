@@ -10,8 +10,9 @@ imports the engine and owns all UI/DOM/render/cache logic.
 ## Build / test / run
 - **No build, no package manager, no dependencies.** Edit `index.html` (UI) and
   `engine.js` (logic). The only test is the headless smoke test:
-  `node test-engine.mjs`. (Only external assets: Google Fonts + three free public
-  APIs.)
+  `node test-engine.mjs` (CI runs the same offline on push/PR to main). (Only
+  external assets: Google Fonts + three free public APIs.)
+
 - **Headless CLI:** `cli.mjs` is a thin agent/shell wrapper over `findNames`.
   Config in via `--groups`/`--file`/`--stdin` (same JSON shape as an in-app
   export), JSON results out on stdout, progress/errors on stderr. Example:
