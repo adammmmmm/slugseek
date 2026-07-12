@@ -60,7 +60,7 @@ const results = await findNames({
 //   sorted best-first by brandability score
 ```
 
-Also exported: `scoreDomain(label, parts)` (pure brandability scoring) and `buildCombos(groups, bothOrders, maxCombos)` (combination generation). A tiny smoke test lives in [`test-engine.mjs`](./test-engine.mjs):
+Also exported: `scoreDomain(label, parts)` (pure brandability scoring) and `buildCombos(groups, bothOrders, maxCombos)` (combination generation). A tiny smoke test lives in [`test-engine.mjs`](./test-engine.mjs); CI runs `node test-engine.mjs` offline on every push/PR to `main`:
 
 ```sh
 node test-engine.mjs
