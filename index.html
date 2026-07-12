@@ -671,8 +671,14 @@ button.run:disabled {
   align-items: center;
   gap: 6px;
 }
-.vall {
+.resacts {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.vall {
   background: transparent;
   border: 1px solid rgba(70, 240, 160, 0.4);
   color: var(--green);
@@ -680,6 +686,7 @@ button.run:disabled {
   padding: 5px 10px;
   font-size: 11.5px;
   cursor: pointer;
+  white-space: nowrap;
 }
 .vall:disabled {
   opacity: 0.4;
@@ -1546,7 +1553,11 @@ button.run:disabled {
               <button class="sopt" data-s="default" aria-pressed="false">original</button>
               <button class="sopt" data-s="az"    aria-pressed="false">a&#8211;z</button>
             </span>
-            <button class="vall" id="verifyAll" title="confirm all open">[ confirm ]</button>
+            <span class="resacts">
+              <button class="vall" id="verifyAll" title="confirm all open (click again to stop)">[ confirm ]</button>
+              <button class="vall" id="exportOpen" title="copy open domains (csv)">[ export open ]</button>
+              <button class="vall" id="deepCheckBtn" title="copy diligence links for top open / favorites (max 20)">[ deep-check ]</button>
+            </span>
           </div>
         </div>
         <div class="res-empty" id="resEmpty"></div>
@@ -1627,7 +1638,17 @@ button.run:disabled {
 <div class="rowsheet" id="rowSheet" role="dialog" aria-modal="true" aria-label="domain details"></div>
 
 <script type="module">
-import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./engine.js";
+import {
+  buildCombos,
+  scoreDomain,
+  dohNS,
+  rdapCheck,
+  pool,
+  makePacer,
+  deepCheckLinks,
+  formatDeepCheckText,
+  DEEP_CHECK_MAX,
+} from "./engine.js";
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
@@ -1654,6 +1675,8 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     resEmpty: $("resEmpty"),
     rows: $("rows"),
     verifyAll: $("verifyAll"),
+    exportOpen: $("exportOpen"),
+    deepCheckBtn: $("deepCheckBtn"),
     topZone: $("topZone"),
     resHead: $("resHead"),
     cOpen: $("cOpen"),
@@ -2613,6 +2636,9 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     } else if (s === "go") {
       acts += `<a class="rs-btn buy" href="${BUY_URL(d.domain)}" target="_blank" rel="noopener">register ↗</a>`;
     }
+    if (s === "clear" || s === "go") {
+      acts += `<button class="rs-btn" data-act="diligence">diligence</button>`;
+    }
     // favoriting lives inline on the row (star); the sheet holds confirm/register + copy
     acts += `<button class="rs-btn copy${acts ? "" : " wide"}" data-act="copy">copy</button>`;
     html += `<div class="rs-acts">${acts}</div>`;
@@ -2623,6 +2649,13 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
       cfBtn.onclick = async () => {
         await verify(d, false);
         if (rowSheetFor === d) openRowSheet(d); // refresh with the new state
+      };
+    const dilBtn = el.rowSheet.querySelector('[data-act="diligence"]');
+    if (dilBtn)
+      dilBtn.onclick = () => {
+        openDiligence(d.domain);
+        dilBtn.textContent = "opened";
+        setTimeout(() => (dilBtn.textContent = "diligence"), 900);
       };
     const cpBtn = el.rowSheet.querySelector('[data-act="copy"]');
     if (cpBtn)
@@ -2830,11 +2863,40 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
     else favorites.add(domain);
     saveDebounced();
   }
+
+  // Open diligence tabs for one name (web + trademark). Never bulk.
+  function openDiligence(domain) {
+    const dc = deepCheckLinks(domain);
+    window.open(dc.web, "_blank", "noopener");
+    window.open(dc.trademarkWeb, "_blank", "noopener");
+  }
+
+  // Shortlist for deep-check: favorites that are open, else top open by score.
+  function deepCheckShortlist() {
+    const openRows = rows.filter((d) => bucketOf(d) === "open");
+    const favOpen = openRows.filter((d) => favorites.has(d.domain));
+    const poolRows = favOpen.length ? favOpen : openRows;
+    return poolRows
+      .slice()
+      .sort((a, b) => scoreOf(b).score - scoreOf(a).score || a.domain.localeCompare(b.domain))
+      .slice(0, DEEP_CHECK_MAX)
+      .map((d) => ({ domain: d.domain, score: scoreOf(d).score, parts: d.parts }));
+  }
+
+  let confirming = false;
   el.verifyAll.onclick = async () => {
+    // Second click cancels an in-flight confirm-all.
+    if (confirming) {
+      aborted = true;
+      el.verifyAll.textContent = "[ stopping\u2026 ]";
+      return;
+    }
     const open = rows.filter((d) => stateOf(d) === "clear" && !d.verifying);
     if (!open.length) return;
-    el.verifyAll.disabled = true;
+    confirming = true;
     aborted = false;
+    el.verifyAll.disabled = false;
+    el.verifyAll.textContent = `[ confirm 0/${open.length} \u00b7 stop ]`;
     let done = 0;
     const tot = open.length;
     for (let i = 0; i < open.length; i += CONFIRM_CHUNK) {
@@ -2842,13 +2904,53 @@ import { buildCombos, scoreDomain, dohNS, rdapCheck, pool, makePacer } from "./e
       const chunk = open.slice(i, i + CONFIRM_CHUNK);
       await pool(chunk, RDAP_CONC, (d) => verify(d, true), () => aborted);
       done += chunk.length;
-      el.verifyAll.textContent = `[ confirming ${done}/${tot}\u2026 ]`;
+      el.verifyAll.textContent = aborted
+        ? "[ stopping\u2026 ]"
+        : `[ confirm ${done}/${tot} \u00b7 stop ]`;
       recount();
       renderResults();
     }
+    confirming = false;
     el.verifyAll.textContent = "[ confirm ]";
     recount();
     saveState();
+  };
+
+  el.exportOpen.onclick = () => {
+    const openRows = rows
+      .filter((d) => bucketOf(d) === "open")
+      .slice()
+      .sort((a, b) => scoreOf(b).score - scoreOf(a).score || a.domain.localeCompare(b.domain));
+    if (!openRows.length) {
+      toast("no open domains to export");
+      return;
+    }
+    const lines = ["domain,score,state,parts"];
+    openRows.forEach((d) => {
+      const st = stateOf(d) === "go" ? "confirmed" : "unconfirmed";
+      const parts = Array.isArray(d.parts) ? d.parts.join("+") : "";
+      lines.push(`${d.domain},${scoreOf(d).score},${st},${parts}`);
+    });
+    navigator.clipboard?.writeText(lines.join("\n")).then(
+      () => toast(`copied ${openRows.length} open domain${openRows.length === 1 ? "" : "s"}`),
+      () => toast("copy failed"),
+    );
+  };
+
+  el.deepCheckBtn.onclick = () => {
+    const list = deepCheckShortlist();
+    if (!list.length) {
+      toast("no open names for deep-check");
+      return;
+    }
+    const text = formatDeepCheckText(list, DEEP_CHECK_MAX);
+    navigator.clipboard?.writeText(text).then(
+      () =>
+        toast(
+          `deep-check links for ${list.length} name${list.length === 1 ? "" : "s"} copied (max ${DEEP_CHECK_MAX})`,
+        ),
+      () => toast("copy failed"),
+    );
   };
 
   // ===== sweep =====

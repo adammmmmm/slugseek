@@ -52,8 +52,117 @@ export function buildCombos(groups, bothOrders, maxCombos) {
   return out;
 }
 
-// ===== brandability scoring (§9): pure, no deps, no network =====
+// ===== brandability scoring: pure, no deps, no network =====
+// Phonetics + lightweight semantics (filler, synonym overlap, empty joins,
+// unfortunate seam reads). Meaning "would a founder build on this?" is still
+// a human/agent acid test; this only ranks and flags traps.
 const SCORE_HARD_CLUSTERS = ["thr", "spl", "schr", "ngth", "tchst", "rdsr"];
+// Pure filler prefixes: drop them and the rest is the brand.
+const FILLER_PREFIXES = new Set([
+  "my",
+  "the",
+  "meet",
+  "our",
+  "your",
+  "best",
+  "top",
+  "super",
+  "ultra",
+  "mega",
+  "all",
+  "new",
+]);
+// Verb-ish prefixes that are often dead weight when glued to a strong root.
+const WEAK_VERB_PREFIXES = new Set(["get", "try", "go", "use", "make"]);
+// Thin place/category tokens: two of these with no identity word ≈ empty join.
+const THIN_WORDS = new Set([
+  "hub",
+  "den",
+  "nest",
+  "spot",
+  "zone",
+  "box",
+  "app",
+  "web",
+  "net",
+  "bit",
+  "pro",
+  "max",
+  "min",
+  "lab",
+  "labs",
+  "shop",
+  "co",
+  "hq",
+  "inc",
+]);
+// Near-synonym buckets: both halves in one bucket say the same thing twice.
+const SYNONYM_GROUPS = [
+  ["lab", "labs", "studio", "works", "forge", "shop", "craft", "foundry"],
+  ["swift", "fast", "quick", "rapid", "speedy"],
+  ["bright", "light", "clear", "shine", "glow"],
+  ["hub", "nest", "den", "base", "hq", "center", "centre"],
+  ["code", "dev", "build", "script", "byte"],
+  ["path", "way", "road", "route", "trail"],
+  ["peak", "summit", "crest", "apex"],
+  ["wave", "tide", "flow", "stream"],
+];
+// Bad tokens that only count when they form at a word seam (not wholly inside one half).
+const BAD_SEAM_TOKENS = [
+  "ass",
+  "sex",
+  "cum",
+  "fag",
+  "dick",
+  "cock",
+  "shit",
+  "piss",
+  "anal",
+  "rape",
+  "nazi",
+  "fuck",
+  "cunt",
+  "porn",
+  "xxx",
+];
+
+function stemKey(w) {
+  w = (w || "").toLowerCase();
+  if (w.length >= 4 && w.endsWith("s") && !w.endsWith("ss")) w = w.slice(0, -1);
+  if (w.length > 5 && w.endsWith("ing")) w = w.slice(0, -3);
+  if (w.length > 4 && w.endsWith("er")) w = w.slice(0, -2);
+  return w;
+}
+
+function sameSynonymGroup(a, b) {
+  const la = a.toLowerCase(),
+    lb = b.toLowerCase();
+  for (const g of SYNONYM_GROUPS) {
+    if (g.includes(la) && g.includes(lb) && la !== lb) return g.join("/");
+  }
+  return null;
+}
+
+// Tokens that appear only because two parts were glued (cross the seam).
+function seamOnlyBadHits(parts) {
+  if (!parts || parts.length < 2) return [];
+  const hits = [];
+  for (let i = 0; i < parts.length - 1; i++) {
+    const left = (parts[i] || "").toLowerCase();
+    const right = (parts[i + 1] || "").toLowerCase();
+    const joined = left + right;
+    for (const tok of BAD_SEAM_TOKENS) {
+      if (!joined.includes(tok)) continue;
+      if (left.includes(tok) || right.includes(tok)) continue;
+      // must actually straddle the join point
+      const idx = joined.indexOf(tok);
+      const seam = left.length;
+      if (idx < seam && idx + tok.length > seam) hits.push(tok);
+    }
+  }
+  return [...new Set(hits)];
+}
+
 export function sylCount(s) {
   s = (s || "").toLowerCase().replace(/[^a-z]/g, "");
   if (!s) return 0;
@@ -63,7 +172,7 @@ export function sylCount(s) {
 }
 export function scoreDomain(label, parts) {
   label = (label || "").toLowerCase();
-  parts = (parts || []).filter((p) => p && p.length);
+  parts = (parts || []).filter((p) => p && p.length).map((p) => String(p).toLowerCase());
   const len = label.length,
     syl = sylCount(label);
   const flags = [],
@@ -80,7 +189,7 @@ export function scoreDomain(label, parts) {
   };
   breakdown.push({ delta: 50, label: "baseline", kind: "base" });
 
-  // ---- §9.2 hard rules ----
+  // ---- hard rules ----
   if (/[^a-z]/.test(label)) {
     flags.push("non-alpha");
     add(-40, "non-alpha character", "bad");
@@ -120,7 +229,14 @@ export function scoreDomain(label, parts) {
     add(-clunk * 5, `clunky letter${clunk > 1 ? "s" : ""} ×${clunk} (q/x/z)`, "bad");
   }
 
-  // ---- §9.3 soft signals ----
+  // Unfortunate readings formed only at the join (pen-island class).
+  const seamBads = seamOnlyBadHits(parts);
+  if (seamBads.length) {
+    flags.push("bad-seam");
+    add(-28 * seamBads.length, `unfortunate seam read (“${seamBads.join("”, “")}”)`, "bad");
+  }
+
+  // ---- soft phonetics ----
   if (len >= 5 && len <= 10) add(14, `length ${len} (5–10 sweet spot)`, "good");
   else if (len === 11 || len === 12) add(4, `length ${len} (slightly long)`, "info");
   else if (len > 12) {
@@ -153,6 +269,50 @@ export function scoreDomain(label, parts) {
     add(-(maxRun - 3) * 6, `consonant pile-up (${maxRun} in a row)`, "bad");
   }
 
+  // ---- lightweight semantics (still pure client-side) ----
+  if (parts.length >= 2) {
+    const a = parts[0],
+      b = parts[1];
+
+    // Filler prefix: "myforge", "thelab", …
+    if (FILLER_PREFIXES.has(a) && b.length >= 3) {
+      flags.push("filler");
+      notes.push("filler-prefix");
+      add(-18, `filler prefix (“${a}-”)`, "bad");
+    } else if (WEAK_VERB_PREFIXES.has(a) && b.length >= a.length + 2) {
+      // get/try/go often add nothing; light penalty (intentional getX brands still score ok)
+      notes.push("weak-prefix");
+      add(-8, `weak verb prefix (“${a}-”)`, "bad");
+    }
+
+    // Same stem twice: lab/labs, work/works
+    if (stemKey(a) && stemKey(a) === stemKey(b)) {
+      flags.push("tautology");
+      notes.push("same-stem");
+      add(-22, `same stem twice (“${a}” / “${b}”)`, "bad");
+    } else {
+      const syn = sameSynonymGroup(a, b);
+      if (syn) {
+        flags.push("synonym");
+        notes.push("synonym-overlap");
+        add(-16, `near-synonym halves (${syn})`, "bad");
+      }
+    }
+
+    // Empty join: two thin place/category words, no identity payload
+    if (THIN_WORDS.has(a) && THIN_WORDS.has(b)) {
+      flags.push("empty");
+      notes.push("empty-join");
+      add(-20, `empty join (“${a}” + “${b}” are both thin)`, "bad");
+    }
+
+    // 3+ distinct parts: hard to own
+    if (parts.length >= 3) {
+      notes.push("multi-concept");
+      add(-12, `${parts.length} parts (prefer two)`, "bad");
+    }
+  }
+
   const raw = score;
   score = Math.max(0, Math.min(100, Math.round(score)));
   return {
@@ -167,6 +327,68 @@ export function scoreDomain(label, parts) {
     notes,
     breakdown,
   };
+}
+
+// ===== deep-check (shortlist only; link-out, no bulk fetch) =====
+// Cap diligence to a handful of names. Never run on a full multi-thousand sweep.
+export const DEEP_CHECK_MAX = 20;
+
+// Build USPTO + web collision links for one domain or SLD. No network.
+export function deepCheckLinks(domainOrLabel) {
+  const raw = String(domainOrLabel || "").trim().toLowerCase();
+  const label = raw.replace(/\.com$/i, "").replace(/[^a-z0-9-]/g, "");
+  const domain = label ? label + ".com" : "";
+  const q = encodeURIComponent(label);
+  const qBrand = encodeURIComponent(`"${label}" brand OR company OR app OR software`);
+  const qExact = encodeURIComponent(`"${label}.com"`);
+  const qTm = encodeURIComponent(`"${label}" trademark`);
+  return {
+    label,
+    domain,
+    // DuckDuckGo: no login, fine as a collision starting point
+    web: `https://duckduckgo.com/?q=${qBrand}`,
+    webExact: `https://duckduckgo.com/?q=${qExact}`,
+    // USPTO has no stable CORS API for bulk use; open their search + a trademark web query
+    uspto: `https://tmsearch.uspto.gov/`,
+    usptoHint: label,
+    trademarkWeb: `https://duckduckgo.com/?q=${qTm}`,
+  };
+}
+
+// Attach deepCheck links to at most `max` rows (already filtered/sorted by caller).
+export function attachDeepCheck(rows, max = DEEP_CHECK_MAX) {
+  const n = Math.max(0, Math.min(Number(max) || DEEP_CHECK_MAX, DEEP_CHECK_MAX));
+  return (rows || []).slice(0, n).map((r) => ({
+    ...r,
+    deepCheck: deepCheckLinks(r.domain || r),
+  }));
+}
+
+// Human-readable diligence block for clipboard (UI / agents).
+export function formatDeepCheckText(rows, max = DEEP_CHECK_MAX) {
+  const list = attachDeepCheck(rows, max);
+  if (!list.length) return "";
+  const lines = [
+    `# slugseek deep-check (shortlist, max ${Math.min(list.length, max)})`,
+    `# open ≠ clear trademark. Check each name before you register.`,
+    "",
+  ];
+  for (const r of list) {
+    const dc = r.deepCheck;
+    const score =
+      r.score && typeof r.score === "object"
+        ? r.score.score
+        : typeof r.score === "number"
+          ? r.score
+          : "";
+    lines.push(`## ${dc.domain}${score !== "" ? `  (score ${score})` : ""}`);
+    lines.push(`web:        ${dc.web}`);
+    lines.push(`exact:      ${dc.webExact}`);
+    lines.push(`trademark:  ${dc.trademarkWeb}`);
+    lines.push(`uspto:      ${dc.uspto}  (search for: ${dc.usptoHint})`);
+    lines.push("");
+  }
+  return lines.join("\n");
 }
 
 // ===== adaptive pacing =====

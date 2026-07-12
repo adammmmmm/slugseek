@@ -23,8 +23,10 @@ imports the engine and owns all UI/DOM/render/cache logic.
   Deploy: see `DEPLOY.md`.
 
 ## Where things are
-- **`engine.js`**: `buildCombos()` ~16, `scoreDomain()` ~64, `dohNS`/`rdapCheck`/
-  `pool`/`makePacer` (network + pacing), `findNames()` ~318 (headless pipeline).
+- **`engine.js`**: `buildCombos()`, `scoreDomain()` (phonetics + lightweight
+  semantics), `deepCheckLinks`/`attachDeepCheck`/`formatDeepCheckText` (shortlist
+  diligence, max 20), `dohNS`/`rdapCheck`/`pool`/`makePacer`, `findNames()`
+  (headless pipeline).
 - **`index.html`** tunable constants (top of `<script>`, ~line 1494+): `REGISTRAR`,
   `MAX_COMBOS`, `DOH_CONC`, `RDAP_CONC`, `AUTO_T2_MAX`, `DISPLAY_CAP`/
   `SHOW_MORE_CHUNK`, `CACHE_STORE_MAX`. UI orchestration: `sweep()` ~line 2674
