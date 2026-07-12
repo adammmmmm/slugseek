@@ -53,27 +53,62 @@ export function buildCombos(groups, bothOrders, maxCombos) {
 }
 
 // ===== brandability scoring: pure, no deps, no network =====
-// Phonetics + lightweight semantics (filler, synonym overlap, empty joins,
-// unfortunate seam reads). Meaning "would a founder build on this?" is still
-// a human/agent acid test; this only ranks and flags traps.
+// Phonetics + position-aware naming heuristics (startup domain patterns).
+// Order matters: "thehive" / "tryhive" are classic brand+prefix forms;
+// "hivethe" / "hivetry" are almost never names. Meaning is still a final
+// human/agent acid test; this ranks and flags structural traps.
 const SCORE_HARD_CLUSTERS = ["thr", "spl", "schr", "ngth", "tchst", "rdsr"];
-// Pure filler prefixes: drop them and the rest is the brand.
-const FILLER_PREFIXES = new Set([
-  "my",
-  "the",
+// Determiners / CTA verbs that work as PREFIXES in real startup domains
+// (thehive, tryfigma, getnotion, gohugo, …) — never as the second half.
+const BRAND_ARTICLE_PREFIXES = new Set(["the"]);
+const BRAND_ACTION_PREFIXES = new Set([
+  "get",
+  "try",
+  "go",
+  "use",
+  "join",
+  "hey",
   "meet",
+  "make",
+]);
+// Possessives / hype as first half: weaker than The/Try but still used (myX).
+// Prefer a light penalty as prefix; as suffix they are dead weight (see below).
+const WEAK_POSSESSIVE_PREFIXES = new Set(["my", "our", "your"]);
+const HYPE_PREFIXES = new Set(["best", "top", "super", "ultra", "mega", "all", "new"]);
+// Second-half dead weight: articles, CTA verbs, possessives, function words.
+// "hivethe" / "hivetry" should never rank near a real brand form.
+const DEAD_SUFFIXES = new Set([
+  "the",
+  "a",
+  "an",
+  "try",
+  "get",
+  "go",
+  "use",
+  "make",
+  "join",
+  "hey",
+  "meet",
+  "my",
   "our",
   "your",
+  "of",
+  "for",
+  "to",
+  "and",
+  "or",
+  "is",
+  "be",
+  "do",
+  "it",
+  "me",
+  "we",
+  "us",
   "best",
   "top",
-  "super",
-  "ultra",
-  "mega",
-  "all",
   "new",
+  "all",
 ]);
-// Verb-ish prefixes that are often dead weight when glued to a strong root.
-const WEAK_VERB_PREFIXES = new Set(["get", "try", "go", "use", "make"]);
 // Thin place/category tokens: two of these with no identity word ≈ empty join.
 const THIN_WORDS = new Set([
   "hub",
@@ -253,7 +288,8 @@ export function scoreDomain(label, parts) {
   else if (syl === 1) add(-4, "1 syllable (thin)", "bad");
   else if (syl >= 5) add(-10, `${syl} syllables (too many)`, "bad");
 
-  const vc = (label.match(/[aeiou]/g) || []).length,
+  // Count y as a vowel for ratio + pile-up (matches sylCount; "tryhive" is not a 4-consonant run).
+  const vc = (label.match(/[aeiouy]/g) || []).length,
     ratio = vc / Math.max(1, len);
   const rpct = Math.round(ratio * 100);
   if (ratio >= 0.3 && ratio <= 0.55) add(10, `vowel ratio ${rpct}% (balanced)`, "good");
@@ -262,27 +298,47 @@ export function scoreDomain(label, parts) {
     add(-8, `vowel ratio ${rpct}% (imbalanced)`, "bad");
   } else breakdown.push({ delta: 0, label: `vowel ratio ${rpct}% (acceptable)`, kind: "info" });
 
-  const runs = label.match(/[^aeiou]+/g) || [];
+  const runs = label.match(/[^aeiouy]+/g) || [];
   const maxRun = runs.reduce((m, r) => Math.max(m, r.length), 0);
   if (maxRun >= 4) {
     notes.push("pileup");
     add(-(maxRun - 3) * 6, `consonant pile-up (${maxRun} in a row)`, "bad");
   }
 
-  // ---- lightweight semantics (still pure client-side) ----
+  // ---- position-aware naming heuristics (still pure client-side) ----
+  // Startup domains routinely use TheX / TryX / GetX as the *domain* form of a
+  // product called X. The reverse (Xthe, Xtry) is almost never a brand.
   if (parts.length >= 2) {
     const a = parts[0],
       b = parts[1];
+    const rootOk = b.length >= 3 && !DEAD_SUFFIXES.has(b) && !BRAND_ARTICLE_PREFIXES.has(b);
 
-    // Filler prefix: "myforge", "thelab", …
-    if (FILLER_PREFIXES.has(a) && b.length >= 3) {
-      flags.push("filler");
-      notes.push("filler-prefix");
-      add(-18, `filler prefix (“${a}-”)`, "bad");
-    } else if (WEAK_VERB_PREFIXES.has(a) && b.length >= a.length + 2) {
-      // get/try/go often add nothing; light penalty (intentional getX brands still score ok)
-      notes.push("weak-prefix");
-      add(-8, `weak verb prefix (“${a}-”)`, "bad");
+    // 1) Dead second half first (hard structural fail).
+    if (DEAD_SUFFIXES.has(b)) {
+      flags.push("dead-suffix");
+      notes.push("bad-order");
+      add(
+        -34,
+        `dead second half (“-${b}”: articles/CTA verbs belong as prefixes, not suffixes)`,
+        "bad",
+      );
+    } else if (BRAND_ARTICLE_PREFIXES.has(a) && rootOk) {
+      // 2) TheHive pattern: determiner + identity noun. Real brand form.
+      flags.push("brand-prefix");
+      notes.push("the-brand");
+      add(18, `brand article prefix (“the-” + “${b}”)`, "good");
+    } else if (BRAND_ACTION_PREFIXES.has(a) && rootOk) {
+      // 3) TryHive / GetNotion / GoHugo: CTA verb + product name.
+      flags.push("brand-prefix");
+      notes.push("action-prefix");
+      add(12, `brand action prefix (“${a}-” + “${b}”)`, "good");
+    } else if (WEAK_POSSESSIVE_PREFIXES.has(a) && rootOk) {
+      // 4) myX is used but weaker than The/Try; light penalty only.
+      notes.push("possessive-prefix");
+      add(-6, `possessive prefix (“${a}-”)`, "bad");
+    } else if (HYPE_PREFIXES.has(a) && rootOk) {
+      notes.push("hype-prefix");
+      add(-10, `hype prefix (“${a}-”)`, "bad");
     }
 
     // Same stem twice: lab/labs, work/works

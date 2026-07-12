@@ -15,7 +15,7 @@ No backend. No build step. No API keys. No dependencies beyond Google Fonts and 
 ## Features
 
 - **Two-tier availability check:** a fast DNS-over-HTTPS pass (Google, Cloudflare fallback) to find likely-open names, then authoritative RDAP confirmation (Verisign) for a definitive available/registered answer.
-- **Brandability scoring:** every open candidate is scored 0-100 against a naming rubric (length, syllables, pronounceability, seam double-letters, consonant pile-ups, vowel balance, plus lightweight semantics: filler prefixes, synonym halves, empty joins, unfortunate seam reads). Hover any score for a full breakdown of every signal and its point contribution. All scoring is pure client-side in `engine.js`.
+- **Brandability scoring:** every open candidate is scored 0-100 against a naming rubric (length, syllables, pronounceability, seam double-letters, consonant pile-ups, vowel balance, plus position-aware startup-domain heuristics: `the`/`try`/`get` as brand **prefixes** score high; the same tokens as **suffixes** are dead weight; plus synonym halves, empty joins, unfortunate seam reads). Hover any score for a full breakdown. All scoring is pure client-side in `engine.js`.
 - **Grouping:** words live in groups; combinations are cross-group only (modifier × root). Drag a group's handle to reorder it (flip prefix/suffix). Drag words between groups.
 - **Sorting:** `score` (best-first, the default), `grouped` (by sweep), `default` (search order), `a-z`.
 - **Batches:** each sweep appends below the last; add words and re-run to check only the new combinations.
