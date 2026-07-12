@@ -12,6 +12,9 @@ import {
   findNames,
   buildCombos,
   scoreDomain,
+  wordRole,
+  classifyParts,
+  WORD_ROLES,
   deepCheckLinks,
   attachDeepCheck,
   formatDeepCheckText,
@@ -75,6 +78,40 @@ assert(hiveTry.flags.includes("dead-suffix"), "hivetry should flag dead-suffix")
 assert(tryHive.score > hiveTry.score + 20, "tryhive must crush hivetry");
 console.log(
   `  order: thehive=${theHive.score} hivethe=${hiveThe.score} tryhive=${tryHive.score} hivetry=${hiveTry.score}`,
+);
+
+// Word-role classifier (position-aware data; scoreDomain consumes these) ----
+assert(wordRole("the", 0) === WORD_ROLES.BRAND_ARTICLE_PREFIX, "the@0 is brand-article-prefix");
+assert(wordRole("the", 1) === WORD_ROLES.DEAD_SUFFIX, "the@1 is dead-suffix");
+assert(wordRole("try", 0) === WORD_ROLES.BRAND_ACTION_PREFIX, "try@0 is brand-action-prefix");
+assert(wordRole("try", 1) === WORD_ROLES.DEAD_SUFFIX, "try@1 is dead-suffix");
+assert(wordRole("hive", 0) === WORD_ROLES.CONTENT, "hive@0 is content");
+assert(wordRole("hive", 1) === WORD_ROLES.CONTENT, "hive@1 is content");
+assert(wordRole("my", 0) === WORD_ROLES.WEAK_POSSESSIVE_PREFIX, "my@0 is weak-possessive-prefix");
+assert(wordRole("best", 0) === WORD_ROLES.HYPE_PREFIX, "best@0 is hype-prefix");
+
+const theHiveRoles = classifyParts(["the", "hive"]);
+assert(
+  theHiveRoles.map((r) => r.role).join(",") === "brand-article-prefix,content",
+  "classifyParts(the,hive) roles",
+);
+const hiveTheRoles = classifyParts(["hive", "the"]);
+assert(
+  hiveTheRoles.map((r) => r.role).join(",") === "content,dead-suffix",
+  "classifyParts(hive,the) roles",
+);
+assert(
+  Array.isArray(theHive.roles) &&
+    theHive.roles[0] === WORD_ROLES.BRAND_ARTICLE_PREFIX &&
+    theHive.roles[1] === WORD_ROLES.CONTENT,
+  "scoreDomain attaches roles for thehive",
+);
+assert(
+  Array.isArray(hiveThe.roles) && hiveThe.roles[1] === WORD_ROLES.DEAD_SUFFIX,
+  "scoreDomain attaches dead-suffix role for hivethe",
+);
+console.log(
+  `  roles: thehive=${theHive.roles.join("+")} hivethe=${hiveThe.roles.join("+")}`,
 );
 
 // keep / reject fixture table ----------------------------------------------

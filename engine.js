@@ -57,9 +57,24 @@ export function buildCombos(groups, bothOrders, maxCombos) {
 // Order matters: "thehive" / "tryhive" are classic brand+prefix forms;
 // "hivethe" / "hivetry" are almost never names. Meaning is still a final
 // human/agent acid test; this ranks and flags structural traps.
+//
+// Word roles are first-class data (wordRole / classifyParts). scoreDomain
+// applies bonuses and penalties from those roles; legacy flags brand-prefix
+// and dead-suffix stay on the result for UI badges and existing tests.
 const SCORE_HARD_CLUSTERS = ["thr", "spl", "schr", "ngth", "tchst", "rdsr"];
+
+/** Stable role tags for each half of a compound (position-aware). */
+export const WORD_ROLES = Object.freeze({
+  BRAND_ARTICLE_PREFIX: "brand-article-prefix",
+  BRAND_ACTION_PREFIX: "brand-action-prefix",
+  WEAK_POSSESSIVE_PREFIX: "weak-possessive-prefix",
+  HYPE_PREFIX: "hype-prefix",
+  DEAD_SUFFIX: "dead-suffix",
+  CONTENT: "content",
+});
+
 // Determiners / CTA verbs that work as PREFIXES in real startup domains
-// (thehive, tryfigma, getnotion, gohugo, …) — never as the second half.
+// (thehive, tryfigma, getnotion, gohugo, ...) never as the second half.
 const BRAND_ARTICLE_PREFIXES = new Set(["the"]);
 const BRAND_ACTION_PREFIXES = new Set([
   "get",
@@ -109,6 +124,50 @@ const DEAD_SUFFIXES = new Set([
   "new",
   "all",
 ]);
+
+/**
+ * Classify one word by its role given position in the compound.
+ * position 0 = first half (prefix slot); 1+ = later halves (suffix slots).
+ * Pure: no network, no DOM. Default is content (root/identity payload).
+ *
+ * @param {string} word
+ * @param {number} position 0-based index among parts
+ * @returns {string} one of WORD_ROLES values
+ */
+export function wordRole(word, position) {
+  const w = String(word || "")
+    .toLowerCase()
+    .replace(/[^a-z]/g, "");
+  const pos = position | 0;
+  if (!w) return WORD_ROLES.CONTENT;
+
+  if (pos === 0) {
+    // First half: brand prefixes, weak possessives, hype; never dead-suffix.
+    // "the" as a prefix is brand-article-prefix (TheHive), not filler.
+    if (BRAND_ARTICLE_PREFIXES.has(w)) return WORD_ROLES.BRAND_ARTICLE_PREFIX;
+    if (BRAND_ACTION_PREFIXES.has(w)) return WORD_ROLES.BRAND_ACTION_PREFIX;
+    if (WEAK_POSSESSIVE_PREFIXES.has(w)) return WORD_ROLES.WEAK_POSSESSIVE_PREFIX;
+    if (HYPE_PREFIXES.has(w)) return WORD_ROLES.HYPE_PREFIX;
+    return WORD_ROLES.CONTENT;
+  }
+
+  // Later halves: articles/CTA/function words are dead weight as suffixes.
+  if (DEAD_SUFFIXES.has(w)) return WORD_ROLES.DEAD_SUFFIX;
+  return WORD_ROLES.CONTENT;
+}
+
+/**
+ * Classify every half of a compound in order.
+ * @param {string[]} parts
+ * @returns {{ word: string, role: string }[]}
+ */
+export function classifyParts(parts) {
+  const list = (parts || [])
+    .filter((p) => p && String(p).length)
+    .map((p) => String(p).toLowerCase());
+  return list.map((word, i) => ({ word, role: wordRole(word, i) }));
+}
+
 // Thin place/category tokens: two of these with no identity word ≈ empty join.
 const THIN_WORDS = new Set([
   "hub",
@@ -306,15 +365,22 @@ export function scoreDomain(label, parts) {
   }
 
   // ---- position-aware naming heuristics (still pure client-side) ----
+  // Roles come from classifyParts (data); bonuses/penalties below follow roles.
   // Startup domains routinely use TheX / TryX / GetX as the *domain* form of a
   // product called X. The reverse (Xthe, Xtry) is almost never a brand.
+  const classified = classifyParts(parts);
+  const roles = classified.map((c) => c.role);
+
   if (parts.length >= 2) {
     const a = parts[0],
       b = parts[1];
-    const rootOk = b.length >= 3 && !DEAD_SUFFIXES.has(b) && !BRAND_ARTICLE_PREFIXES.has(b);
+    const roleA = roles[0] || WORD_ROLES.CONTENT;
+    const roleB = roles[1] || WORD_ROLES.CONTENT;
+    // Root must be real content (identity noun), not a dead/function suffix.
+    const rootOk = b.length >= 3 && roleB === WORD_ROLES.CONTENT;
 
     // 1) Dead second half first (hard structural fail).
-    if (DEAD_SUFFIXES.has(b)) {
+    if (roleB === WORD_ROLES.DEAD_SUFFIX) {
       flags.push("dead-suffix");
       notes.push("bad-order");
       add(
@@ -322,21 +388,22 @@ export function scoreDomain(label, parts) {
         `dead second half (“-${b}”: articles/CTA verbs belong as prefixes, not suffixes)`,
         "bad",
       );
-    } else if (BRAND_ARTICLE_PREFIXES.has(a) && rootOk) {
+    } else if (roleA === WORD_ROLES.BRAND_ARTICLE_PREFIX && rootOk) {
       // 2) TheHive pattern: determiner + identity noun. Real brand form.
+      // Legacy flag stays "brand-prefix" for badges/tests; role is finer-grained.
       flags.push("brand-prefix");
       notes.push("the-brand");
       add(18, `brand article prefix (“the-” + “${b}”)`, "good");
-    } else if (BRAND_ACTION_PREFIXES.has(a) && rootOk) {
+    } else if (roleA === WORD_ROLES.BRAND_ACTION_PREFIX && rootOk) {
       // 3) TryHive / GetNotion / GoHugo: CTA verb + product name.
       flags.push("brand-prefix");
       notes.push("action-prefix");
       add(12, `brand action prefix (“${a}-” + “${b}”)`, "good");
-    } else if (WEAK_POSSESSIVE_PREFIXES.has(a) && rootOk) {
+    } else if (roleA === WORD_ROLES.WEAK_POSSESSIVE_PREFIX && rootOk) {
       // 4) myX is used but weaker than The/Try; light penalty only.
       notes.push("possessive-prefix");
       add(-6, `possessive prefix (“${a}-”)`, "bad");
-    } else if (HYPE_PREFIXES.has(a) && rootOk) {
+    } else if (roleA === WORD_ROLES.HYPE_PREFIX && rootOk) {
       notes.push("hype-prefix");
       add(-10, `hype prefix (“${a}-”)`, "bad");
     }
@@ -382,6 +449,8 @@ export function scoreDomain(label, parts) {
     flags,
     notes,
     breakdown,
+    // Per-part role tags (same order as parts). Empty when no parts.
+    roles,
   };
 }
 

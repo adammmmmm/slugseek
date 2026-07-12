@@ -33,6 +33,25 @@ brandability is the product. Treat these as a scoring rubric, not vibes.
 - **Acid test (agent's final pick):** "Would a founder actually build their
   company on this?" If no, drop it regardless of availability.
 
+## Word roles (position-aware tags)
+
+Roles are **data**, not only score side effects. `wordRole(word, position)` and
+`classifyParts(parts)` tag each half; `scoreDomain` applies bonuses/penalties
+from those roles and still emits legacy flags (`brand-prefix`, `dead-suffix`)
+for badges. Result also includes `roles: string[]` (one per part).
+
+| Role | When | Score effect |
+|------|------|--------------|
+| `brand-article-prefix` | `the` at position 0 | strong bonus (TheHive) |
+| `brand-action-prefix` | `try`/`get`/`go`/`use`/… at 0 | solid bonus (TryHive) |
+| `weak-possessive-prefix` | `my`/`our`/`your` at 0 | mild penalty |
+| `hype-prefix` | `best`/`top`/`super`/… at 0 | penalty |
+| `dead-suffix` | articles, CTA verbs, possessives, function words as second+ half | heavy penalty |
+| `content` | everything else (the identity/root payload) | neutral; preferred as second half |
+
+Order is load-bearing: `the`+`hive` → brand article + content; `hive`+`the` →
+content + dead suffix. Never treat prefix `the` as a blanket bad filler.
+
 ## Construction styles that work (generation strategies)
 - **Two-word compound:** core (SoundCloud, Mailchimp).
 - **Portmanteau / shared-syllable blend:** Pinterest, Instagram. *Future* mode
